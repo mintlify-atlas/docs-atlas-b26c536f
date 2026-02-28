@@ -1,0 +1,389 @@
+---
+title: MetaMask wallet
+description: Automated testing with MetaMask extension using Chroma
+---
+
+MetaMask is the most popular wallet for Ethereum and EVM-compatible chains. Chroma provides full automation for testing dApps that integrate with MetaMask.
+
+## Configuration
+
+Chroma uses MetaMask Flask version **13.17.0**:
+
+```typescript
+const METAMASK_CONFIG = {
+  downloadUrl: 'https://github.com/MetaMask/metamask-extension/releases/download/v13.17.0/metamask-flask-chrome-13.17.0-flask.0.zip',
+  extensionName: 'metamask-extension-13.17.0'
+}
+```
+
+<Note>
+Chroma uses MetaMask Flask (the developer version) to enable testing features. The extension is automatically downloaded from the [official MetaMask releases](https://github.com/MetaMask/metamask-extension/releases) when you run `npx @avalix/chroma download-extensions`.
+</Note>
+
+## Setup
+
+Add MetaMask wallet to your test configuration:
+
+```typescript
+import { createWalletTest } from '@avalix/chroma'
+
+const test = createWalletTest({
+  wallets: [{ type: 'metamask' }]
+})
+```
+
+Access the wallet in your tests:
+
+```typescript
+test('connect metamask wallet', async ({ page, wallets }) => {
+  const wallet = wallets.metamask
+  // Use wallet methods
+})
+```
+
+## Methods
+
+### importSeedPhrase
+
+Imports a wallet using a seed phrase (Secret Recovery Phrase). This completes the entire MetaMask onboarding flow automatically.
+
+```typescript
+await wallets.metamask.importSeedPhrase({
+  seedPhrase: string
+}): Promise<void>
+```
+
+<ParamField path="seedPhrase" type="string" required>
+  The 12 or 24-word Secret Recovery Phrase (seed phrase) for the wallet.
+</ParamField>
+
+#### Example
+
+```typescript metamask.spec.ts
+const SEED_PHRASE = 'test test test test test test test test test test test junk'
+
+test('should import account and connect MetaMask', async ({ page, wallets }) => {
+  // Import Ethereum account into MetaMask wallet
+  await wallets.metamask.importSeedPhrase({ seedPhrase: SEED_PHRASE })
+})
+```
+
+<Note>
+
+</Note>
+
+#### Automatic onboarding
+
+`importSeedPhrase` automatically handles the complete MetaMask onboarding:
+
+1. Accepts risk warning for Flask version
+2. Clicks "Import an existing wallet"
+3. Enters the seed phrase
+4. Sets password to `h3llop0lkadot!`
+5. Agrees to metrics (disabled for privacy)
+6. Configures privacy settings:
+   - Disables basic functionality tracking
+   - Disables all asset tracking features
+7. Completes onboarding
+
+### authorize
+
+Authorizes the dApp to connect to MetaMask. Approves the connection request popup.
+
+```typescript
+await wallets.metamask.authorize(): Promise<void>
+```
+
+#### Example
+
+```typescript metamask.spec.ts
+test('connect to dApp', async ({ page, wallets }) => {
+  await page.goto('https://demo.privy.io')
+  await page.getByRole('button', { name: 'Continue with a wallet' }).click()
+  await page.getByRole('button', { name: 'MetaMask Flask' }).click()
+  
+  // Approve connection in MetaMask popup
+  await wallets.metamask.authorize()
+})
+```
+
+<Note>
+
+</Note>
+
+### confirm
+
+Confirms a pending action in MetaMask (transaction, signature, etc.).
+
+```typescript
+await wallets.metamask.confirm(): Promise<void>
+```
+
+#### Example
+
+```typescript metamask.spec.ts
+test('sign message', async ({ page, wallets }) => {
+  // ... connect wallet to dApp ...
+  
+  // Trigger signature request in dApp
+  await page.getByRole('button', { name: 'Sign Message' }).click()
+  
+  // Confirm in MetaMask popup
+  await wallets.metamask.confirm()
+})
+```
+
+<Note>
+
+</Note>
+
+### reject
+
+Rejects a pending action in MetaMask (transaction, signature, connection, etc.).
+
+```typescript
+await wallets.metamask.reject(): Promise<void>
+```
+
+#### Example
+
+```typescript metamask.spec.ts
+test('reject transaction', async ({ page, wallets }) => {
+  // ... connect wallet to dApp ...
+  
+  // Trigger transaction in dApp
+  await page.getByRole('button', { name: 'Send Transaction' }).click()
+  
+  // Reject in MetaMask popup
+  await wallets.metamask.reject()
+  
+  await page.getByText('Transaction rejected').waitFor({ state: 'visible' })
+})
+```
+
+<Note>
+
+</Note>
+
+### unlock
+
+Unlocks MetaMask by navigating to the unlock page and entering the password.
+
+```typescript
+await wallets.metamask.unlock(): Promise<void>
+```
+
+<Warning>
+MetaMask automatically locks after browser restart. Call `unlock()` if you're reusing a browser context.
+</Warning>
+
+#### Example
+
+```typescript
+test('unlock after restart', async ({ page, wallets }) => {
+  // After browser context restart
+  await wallets.metamask.unlock()
+  
+  // Now wallet is ready to use
+  await page.goto('https://my-dapp.com')
+})
+```
+
+<Note>
+
+</Note>
+
+## Complete example
+
+Here's a full test that imports a wallet, connects to a dApp, and confirms a signature:
+
+```typescript metamask.spec.ts
+import { createWalletTest } from '@avalix/chroma'
+
+const SEED_PHRASE = 'test test test test test test test test test test test junk'
+
+const test = createWalletTest({
+  wallets: [{ type: 'metamask' }]
+})
+
+test.setTimeout(30_000 * 2)
+
+test('should import account and connect MetaMask wallet', async ({ page, wallets }) => {
+  const wallet = wallets.metamask
+
+  // Import Ethereum account into MetaMask wallet
+  await wallet.importSeedPhrase({ seedPhrase: SEED_PHRASE })
+
+  await page.goto('https://demo.privy.io')
+  await page.waitForLoadState('domcontentloaded')
+  await page.bringToFront()
+
+  await page.getByRole('button', { name: 'REJECT ALL' }).click()
+  await page.waitForTimeout(3000)
+
+  await page.getByRole('button', { name: 'Continue with a wallet' }).click()
+  await page.getByPlaceholder('Search wallets').click()
+  await page.getByPlaceholder('Search wallets').fill('metamask flask')
+  await page.getByRole('button', { name: 'MetaMask Flask' }).click()
+  await page.getByRole('button', { name: 'MetaMask Flask' }).first().click()
+  
+  // Authorize connection
+  await wallet.authorize()
+  
+  // Confirm signature
+  await wallet.confirm()
+
+  await page.getByText('0x646...E85').first().waitFor({ state: 'visible' })
+})
+```
+
+## Extension path helper
+
+Chroma provides a helper to get the extension path for advanced use cases:
+
+```typescript
+import { getMetaMaskExtensionPath } from '@avalix/chroma/wallets/metamask'
+
+const extensionPath = await getMetaMaskExtensionPath()
+// Returns: /path/to/project/.chroma/metamask-extension-13.17.0
+```
+
+<Warning>
+If the extension hasn't been downloaded, `getMetaMaskExtensionPath()` will throw an error instructing you to run `npx @avalix/chroma download-extensions`.
+</Warning>
+
+## Implementation details
+
+### Side panel vs popup
+
+MetaMask Flask uses a side panel instead of a traditional popup. Chroma uses Chrome DevTools Protocol (CDP) to:
+
+1. Find the side panel via CDP `Target.getTargets`
+2. Open it in a new browser tab for interaction
+3. Close the tab after completing actions
+
+This approach ensures reliable automation across different Chrome versions.
+
+### Password management
+
+MetaMask uses a fixed password `h3llop0lkadot!` for all test wallets. This password is:
+
+- Set automatically during `importSeedPhrase`
+- Used automatically during `unlock`
+- Not exposed in the public API
+
+### Privacy configuration
+
+Chroma automatically disables MetaMask tracking features during onboarding:
+
+- Basic functionality toggle disabled
+- Privacy settings for assets all disabled
+- Metrics opt-out selected
+
+This ensures tests run in a privacy-focused, deterministic environment.
+
+### Extension detection
+
+Chroma uses retry logic to find MetaMask pages:
+
+- Maximum 10 attempts with 500ms delay
+- Searches for onboarding and side panel URLs
+- Waits for `domcontentloaded` state
+
+## TypeScript types
+
+The MetaMask wallet instance type is auto-inferred:
+
+```typescript
+import type { MetaMaskWalletInstance } from '@avalix/chroma'
+
+type MetaMaskWallet = {
+  extensionId: string
+  type: 'metamask'
+  importSeedPhrase: (options: { seedPhrase: string }) => Promise<void>
+  unlock: () => Promise<void>
+  authorize: () => Promise<void>
+  reject: () => Promise<void>
+  confirm: () => Promise<void>
+}
+```
+
+## Common use cases
+
+### Sign message
+
+```typescript
+test('sign message', async ({ page, wallets }) => {
+  await wallets.metamask.importSeedPhrase({ seedPhrase: SEED_PHRASE })
+  
+  // Navigate to dApp and trigger signature
+  await page.goto('https://my-dapp.com')
+  await wallets.metamask.authorize()
+  
+  await page.getByRole('button', { name: 'Sign' }).click()
+  await wallets.metamask.confirm()
+})
+```
+
+### Send transaction
+
+```typescript
+test('send transaction', async ({ page, wallets }) => {
+  await wallets.metamask.importSeedPhrase({ seedPhrase: SEED_PHRASE })
+  
+  await page.goto('https://my-dapp.com')
+  await wallets.metamask.authorize()
+  
+  await page.getByRole('button', { name: 'Send' }).click()
+  await wallets.metamask.confirm()
+})
+```
+
+### Switch network
+
+```typescript
+test('switch network', async ({ page, wallets }) => {
+  await wallets.metamask.importSeedPhrase({ seedPhrase: SEED_PHRASE })
+  await wallets.metamask.authorize()
+  
+  // Trigger network switch in dApp
+  await page.getByRole('button', { name: 'Switch to Polygon' }).click()
+  
+  // Approve network switch
+  await wallets.metamask.confirm()
+})
+```
+
+### Reject transaction
+
+```typescript
+test('reject transaction', async ({ page, wallets }) => {
+  await wallets.metamask.importSeedPhrase({ seedPhrase: SEED_PHRASE })
+  await wallets.metamask.authorize()
+  
+  await page.getByRole('button', { name: 'Send' }).click()
+  await wallets.metamask.reject()
+  
+  // Verify rejection in dApp
+  await page.getByText('User rejected').waitFor({ state: 'visible' })
+})
+```
+
+## Best practices
+
+<Warning>
+Always use test seed phrases with no real funds. The default `test test test...` mnemonic is widely known and should only be used for testing.
+</Warning>
+
+- **Use well-known test mnemonics** - `test test test...` is the standard testing mnemonic
+- **Wait for popups** - MetaMask popups may take time to appear, use appropriate timeouts
+- **Test rejection flows** - Always test both approval and rejection scenarios
+- **Handle unlock state** - Call `unlock()` when reusing browser contexts
+- **Check popup state** - Some flows may not trigger popups if already authorized
+
+## Related resources
+
+- [MetaMask Developer Documentation](https://docs.metamask.io/)
+- [MetaMask Flask](https://metamask.io/flask/)
+- [Ethereum Provider API](https://docs.metamask.io/wallet/reference/provider-api/)
+- [MetaMask GitHub](https://github.com/MetaMask/metamask-extension)

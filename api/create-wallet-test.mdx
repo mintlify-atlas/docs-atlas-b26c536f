@@ -1,0 +1,149 @@
+---
+title: createWalletTest
+description: Create a custom Playwright test with wallet extension support
+---
+
+## Overview
+
+The `createWalletTest` function creates a Playwright test configured with one or more wallet extensions. It returns a test function with custom fixtures for wallet interaction.
+
+## Function signature
+
+```typescript
+function createWalletTest<const T extends readonly WalletConfig[]>(
+  options?: ChromaTestOptions<T>
+): TestType<WalletFixtures<ConfiguredWallets<T>>, WalletWorkerFixtures>
+```
+
+## ChromaTestOptions type
+
+The options object accepts the following parameters:
+
+<ParamField path="wallets" type="WalletConfig[]" optional>
+  Array of wallet configurations to load. Defaults to `[{ type: 'polkadot-js' }]` if not specified.
+  
+  Each `WalletConfig` has:
+  - `type`: `'polkadot-js' | 'talisman' | 'metamask'`
+  - `downloadUrl`: Optional custom download URL for the extension
+</ParamField>
+
+<ParamField path="headless" type="boolean" default="false">
+  Whether to run the browser in headless mode.
+</ParamField>
+
+<ParamField path="slowMo" type="number" default="150">
+  Slows down operations by the specified milliseconds. Useful for debugging.
+</ParamField>
+
+## Return value
+
+Returns a Playwright test function with extended fixtures:
+
+<ResponseField name="page" type="ExtendedPage">
+  Test-scoped page fixture with extension context
+</ResponseField>
+
+<ResponseField name="wallets" type="ConfiguredWallets<T>">
+  Test-scoped wallet instances based on your configuration
+</ResponseField>
+
+<ResponseField name="walletContext" type="BrowserContext">
+  Worker-scoped browser context (persists across tests)
+</ResponseField>
+
+<ResponseField name="walletExtensionIds" type="Map<string, string>">
+  Worker-scoped map of wallet type to extension ID
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+
+```typescript Single wallet (default)
+import { createWalletTest } from '@commonwealth/chroma'
+
+const test = createWalletTest()
+
+test('can connect to Polkadot-JS', async ({ page, wallets }) => {
+  // wallets['polkadot-js'] is available
+  await wallets['polkadot-js'].authorize()
+})
+```
+
+```typescript Custom single wallet
+import { createWalletTest } from '@commonwealth/chroma'
+
+const test = createWalletTest({
+  wallets: [{ type: 'talisman' }],
+  headless: false,
+  slowMo: 200,
+})
+
+test('can connect to Talisman', async ({ page, wallets }) => {
+  // Only wallets.talisman is available
+  await wallets.talisman.authorize()
+})
+```
+
+```typescript Multiple wallets
+import { createWalletTest } from '@commonwealth/chroma'
+
+const test = createWalletTest({
+  wallets: [
+    { type: 'polkadot-js' },
+    { type: 'talisman' },
+    { type: 'metamask' },
+  ] as const,
+})
+
+test('can switch between wallets', async ({ page, wallets }) => {
+  // All three wallet instances are available
+  await wallets['polkadot-js'].authorize()
+  await wallets.talisman.authorize()
+  await wallets.metamask.authorize()
+})
+```
+
+```typescript Custom download URL
+import { createWalletTest } from '@commonwealth/chroma'
+
+const test = createWalletTest({
+  wallets: [
+    {
+      type: 'polkadot-js',
+      downloadUrl: 'https://example.com/custom-polkadot-js.zip',
+    },
+  ],
+})
+```
+
+</CodeGroup>
+
+## Type safety
+
+The function uses TypeScript const assertions to infer the exact wallet types you've configured:
+
+```typescript
+const test = createWalletTest({
+  wallets: [{ type: 'talisman' }] as const,
+})
+
+test('example', async ({ wallets }) => {
+  // TypeScript knows only wallets.talisman exists
+  await wallets.talisman.authorize() // ✅
+  await wallets['polkadot-js'].authorize() // ❌ Type error
+})
+```
+
+## Worker-scoped fixtures
+
+The browser context and extension IDs are worker-scoped, meaning they persist across all tests in a worker process. This improves performance by avoiding repeated extension loading.
+
+<Note>
+The `page` and `wallets` fixtures are test-scoped and recreated for each test, but they reuse the worker-scoped browser context.
+</Note>
+
+## Related
+
+- [Test fixtures](/api/test-fixtures) - Detailed fixture documentation
+- [Wallet instances](/api/wallet-instances) - Wallet method reference

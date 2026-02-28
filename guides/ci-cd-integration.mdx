@@ -1,0 +1,330 @@
+---
+title: CI/CD integration
+description: Set up Chroma in your CI/CD pipeline for automated end-to-end testing
+---
+
+Chroma works seamlessly in CI/CD environments. This guide shows you how to configure GitHub Actions for automated testing with wallet extensions.
+
+## GitHub Actions setup
+
+Here's a complete GitHub Actions workflow for running Chroma tests:
+
+<CodeGroup>
+```yaml .github/workflows/playwright.yml
+name: Playwright
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        e2e-target: [polkadot-js, evm]
+    
+    env:
+      CI: true
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 'lts/*'
+    
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+    
+    - name: Install dependencies
+      run: bun install
+    
+    - name: Build Chroma package
+      run: |
+        cd packages/chroma
+        bun run build
+    
+    - name: Get Playwright version
+      id: playwright-version
+      run: echo "version=$(cd packages/e2e-${{ matrix.e2e-target }} && npx playwright --version | grep -oP '\d+\.\d+\.\d+')" >> $GITHUB_OUTPUT
+    
+    - name: Cache Playwright browsers
+      uses: actions/cache@v4
+      id: playwright-cache
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+    
+    - name: Install Playwright Browsers
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
+      run: |
+        cd packages/e2e-${{ matrix.e2e-target }}
+        npx playwright install --with-deps chromium
+    
+    - name: Download wallet extensions
+      run: |
+        cd packages/e2e-${{ matrix.e2e-target }}
+        bun run test:prepare
+    
+    - name: Run Playwright tests
+      run: |
+        cd packages/e2e-${{ matrix.e2e-target }}
+        xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" -- npx playwright test --reporter=html
+    
+    - uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: playwright-report-${{ matrix.e2e-target }}
+        path: packages/e2e-${{ matrix.e2e-target }}/playwright-report/
+        retention-days: 30
+    
+    - uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: playwright-test-results-${{ matrix.e2e-target }}
+        path: packages/e2e-${{ matrix.e2e-target }}/test-results/
+        retention-days: 30
+```
+</CodeGroup>
+
+## Key steps explained
+
+<Steps>
+  <Step title="Install dependencies">
+    Install Node.js, your package manager (npm, yarn, bun), and project dependencies:
+
+    ```yaml
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 'lts/*'
+    
+    - name: Install dependencies
+      run: npm install
+    ```
+  </Step>
+
+  <Step title="Install Playwright browsers">
+    Install Chromium with dependencies. Cache the browser installation to speed up subsequent runs:
+
+    ```yaml
+    - name: Cache Playwright browsers
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+    
+    - name: Install Playwright Browsers
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
+      run: npx playwright install --with-deps chromium
+    ```
+  </Step>
+
+  <Step title="Download wallet extensions">
+    This is the most critical step. You must download wallet extensions before running tests:
+
+    ```yaml
+    - name: Download wallet extensions
+      run: npx chroma download-extensions
+    ```
+
+    <Warning>
+      Tests will fail if wallet extensions are not downloaded. Always run `chroma download-extensions` before executing tests.
+    </Warning>
+  </Step>
+
+  <Step title="Run tests with xvfb">
+    Use `xvfb-run` to provide a virtual display for headless testing:
+
+    ```yaml
+    - name: Run Playwright tests
+      run: |
+        xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" -- npx playwright test
+    ```
+  </Step>
+
+  <Step title="Upload test artifacts">
+    Save test reports and videos for debugging:
+
+    ```yaml
+    - uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: playwright-report
+        path: playwright-report/
+        retention-days: 30
+    ```
+  </Step>
+</Steps>
+
+## Matrix testing
+
+Test multiple configurations in parallel:
+
+```yaml
+strategy:
+  fail-fast: false
+  matrix:
+    e2e-target: [polkadot-js, evm]
+    # Or test multiple browsers/environments:
+    # browser: [chromium, firefox]
+    # os: [ubuntu-latest, macos-latest]
+```
+
+<Tip>
+  Set `fail-fast: false` to ensure all matrix jobs run even if one fails, giving you complete test coverage results.
+</Tip>
+
+## Environment variables
+
+Set CI-specific environment variables:
+
+```yaml
+env:
+  CI: true
+  DISPLAY: :99
+```
+
+Access them in your tests:
+
+```typescript
+const isCI = process.env.CI === 'true'
+
+const test = createWalletTest({
+  wallets: [{ type: 'polkadot-js' }],
+  headless: isCI, // Run headless in CI, headed locally
+})
+```
+
+## Docker-based CI
+
+For more consistent environments, use Docker in your CI pipeline:
+
+<CodeGroup>
+```yaml .github/workflows/playwright-docker.yml
+name: Playwright (Docker)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test-docker:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        e2e-target: [polkadot-js, evm]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build Docker image
+      run: docker build -t chroma-test .
+
+    - name: Run Playwright tests
+      run: |
+        docker run --rm --shm-size=2gb \
+          -e E2E_TARGET=${{ matrix.e2e-target }} \
+          -v ${{ github.workspace }}/playwright-report:/app/playwright-report \
+          -v ${{ github.workspace }}/test-results:/app/test-results \
+          chroma-test
+
+    - uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: playwright-report-docker-${{ matrix.e2e-target }}
+        path: playwright-report/
+        retention-days: 30
+```
+</CodeGroup>
+
+<Note>
+  Docker provides a consistent testing environment across different CI providers and local development.
+</Note>
+
+## Other CI providers
+
+<Accordion title="GitLab CI">
+  ```yaml
+  test:
+    image: mcr.microsoft.com/playwright:v1.58.0-noble
+    stage: test
+    script:
+      - npm install
+      - npx chroma download-extensions
+      - xvfb-run --auto-servernum -- npx playwright test
+    artifacts:
+      when: always
+      paths:
+        - playwright-report/
+      expire_in: 30 days
+  ```
+</Accordion>
+
+<Accordion title="CircleCI">
+  ```yaml
+  version: 2.1
+  jobs:
+    test:
+      docker:
+        - image: mcr.microsoft.com/playwright:v1.58.0-noble
+      steps:
+        - checkout
+        - run: npm install
+        - run: npx chroma download-extensions
+        - run: xvfb-run --auto-servernum -- npx playwright test
+        - store_artifacts:
+            path: playwright-report
+  ```
+</Accordion>
+
+<Accordion title="Jenkins">
+  ```groovy
+  pipeline {
+    agent {
+      docker {
+        image 'mcr.microsoft.com/playwright:v1.58.0-noble'
+      }
+    }
+    stages {
+      stage('Test') {
+        steps {
+          sh 'npm install'
+          sh 'npx chroma download-extensions'
+          sh 'xvfb-run --auto-servernum -- npx playwright test'
+        }
+      }
+    }
+    post {
+      always {
+        publishHTML([
+          reportDir: 'playwright-report',
+          reportFiles: 'index.html',
+          reportName: 'Playwright Report'
+        ])
+      }
+    }
+  }
+  ```
+</Accordion>
+
+## Troubleshooting CI failures
+
+<Warning>
+  If tests pass locally but fail in CI, check that:
+  - Wallet extensions are downloaded (`npx chroma download-extensions`)
+  - `xvfb-run` is used for headless testing
+  - Sufficient shared memory is allocated (`--shm-size=2gb` for Docker)
+</Warning>
+
+See the [troubleshooting guide](/guides/troubleshooting) for more common CI issues.

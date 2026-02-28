@@ -1,80 +1,224 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Build your first wallet test with Chroma in minutes
 ---
 
-## Get started in three steps
+# Quickstart
 
-Get your documentation site running locally and make your first customization.
+This guide walks you through creating your first wallet test with Chroma. You'll learn how to set up a test, import a wallet, and interact with a dApp.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+Before you begin, make sure you've:
 
-### Step 2: Deploy your changes
+1. [Installed Chroma](/installation)
+2. Downloaded wallet extensions with `npx chroma download-extensions`
+3. Have a local dApp running (or use a test URL)
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+## Create your first test
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+<Steps>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+<Step title="Create a test file">
 
-### Step 3: Go live
+Create a new file `wallet.spec.ts` in your project:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+```typescript wallet.spec.ts
+import { createWalletTest } from '@avalix/chroma'
+
+const test = createWalletTest({
+  wallets: [{ type: 'polkadot-js' }]
+})
+```
+
+The `createWalletTest` function configures Playwright with wallet support. The `wallets` array specifies which wallet extensions to load.
+
+</Step>
+
+<Step title="Import a wallet mnemonic">
+
+Add a test that imports a mnemonic into the Polkadot JS wallet:
+
+```typescript wallet.spec.ts
+test('connect wallet', async ({ page, wallets }) => {
+  const polkadotJs = wallets['polkadot-js']
+
+  await polkadotJs.importMnemonic({
+    seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk'
+  })
+})
+```
+
+<Note>
+  The `wallets` fixture provides access to all configured wallet instances. Each wallet is keyed by its type (e.g., `'polkadot-js'`, `'metamask'`).
+</Note>
+
+</Step>
+
+<Step title="Navigate to your dApp">
+
+Navigate to your dApp and trigger the wallet connection flow:
+
+```typescript wallet.spec.ts
+test('connect wallet', async ({ page, wallets }) => {
+  const polkadotJs = wallets['polkadot-js']
+
+  await polkadotJs.importMnemonic({
+    seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk'
+  })
+
+  await page.goto('http://localhost:3000')
+})
+```
+
+</Step>
+
+<Step title="Authorize the connection">
+
+When your dApp requests wallet access, approve it with `authorize()`:
+
+```typescript wallet.spec.ts
+test('connect wallet', async ({ page, wallets }) => {
+  const polkadotJs = wallets['polkadot-js']
+
+  await polkadotJs.importMnemonic({
+    seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk'
+  })
+
+  await page.goto('http://localhost:3000')
+  await polkadotJs.authorize()
+})
+```
+
+<Tip>
+  The `authorize()` method handles the entire wallet authorization flow, including switching to the extension popup and clicking the approve button.
+</Tip>
+
+</Step>
+
+<Step title="Approve transactions">
+
+When your dApp creates a transaction, approve it with `approveTx()`:
+
+```typescript wallet.spec.ts
+test('connect wallet', async ({ page, wallets }) => {
+  const polkadotJs = wallets['polkadot-js']
+
+  await polkadotJs.importMnemonic({
+    seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk'
+  })
+
+  await page.goto('http://localhost:3000')
+  await polkadotJs.authorize()
+  await polkadotJs.approveTx()
+})
+```
+
+</Step>
+
+<Step title="Run your test">
+
+Run your test with Playwright:
+
+```bash
+npx playwright test
+```
+
+You should see the browser open, the wallet extension load, and the test execute successfully.
+
+</Step>
+
+</Steps>
+
+## Complete example
+
+Here's the complete test file:
+
+```typescript wallet.spec.ts
+import { createWalletTest } from '@avalix/chroma'
+
+const test = createWalletTest({
+  wallets: [{ type: 'polkadot-js' }]
+})
+
+test('connect wallet', async ({ page, wallets }) => {
+  const polkadotJs = wallets['polkadot-js']
+
+  await polkadotJs.importMnemonic({
+    seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk'
+  })
+
+  await page.goto('http://localhost:3000')
+  await polkadotJs.authorize()
+  await polkadotJs.approveTx()
+})
+```
+
+## Testing with MetaMask
+
+To test with MetaMask instead, change the wallet type:
+
+```typescript
+import { createWalletTest, expect } from '@avalix/chroma'
+
+const test = createWalletTest({
+  wallets: [{ type: 'metamask' }]
+})
+
+test('connect wallet and sign transaction', async ({ page, wallets }) => {
+  const metamask = wallets.metamask
+
+  await metamask.importSeedPhrase({
+    seedPhrase: 'test test test test test test test test test test test junk'
+  })
+
+  await page.goto('http://localhost:3000')
+  await page.click('button:has-text("Connect Wallet")')
+  await metamask.authorize()
+
+  await page.click('button:has-text("Send Transaction")')
+  await metamask.confirm()
+
+  await expect(page.locator('.transaction-success')).toBeVisible()
+})
+```
+
+## Testing with multiple wallets
+
+You can test with multiple wallets simultaneously:
+
+```typescript
+import { createWalletTest } from '@avalix/chroma'
+
+const test = createWalletTest({
+  wallets: [{ type: 'metamask' }, { type: 'talisman' }]
+})
+
+test('multi-wallet test', async ({ page, wallets }) => {
+  const metamask = wallets.metamask
+  const talisman = wallets.talisman
+
+  await metamask.importSeedPhrase({ seedPhrase: 'test test test test test test test test test test test junk' })
+  await talisman.importEthPrivateKey({ privateKey: '0x...', name: 'Bob' })
+
+  await page.goto('http://localhost:3000')
+  await metamask.authorize()
+})
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="API reference" icon="code" iconType="duotone" href="/api/create-wallet-test">
+    Explore all available wallet methods
+  </Card>
+  <Card title="Wallets" icon="wallet" iconType="duotone" href="/wallets/overview">
+    Learn about supported wallets
+  </Card>
+  <Card title="CI/CD integration" icon="server" iconType="duotone" href="/guides/ci-cd-integration">
+    Run tests in continuous integration
+  </Card>
+  <Card title="Multi-wallet testing" icon="folder" iconType="duotone" href="/guides/multi-wallet-testing">
+    Test with multiple wallets
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

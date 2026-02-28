@@ -1,0 +1,358 @@
+---
+title: Docker setup
+description: Configure Docker for consistent end-to-end testing with Chroma
+---
+
+Docker provides a consistent testing environment for Chroma, ensuring tests run the same way locally and in CI. This guide shows you how to set up and use Docker with Chroma.
+
+## Why use Docker?
+
+- **Consistency**: Same environment across local development and CI/CD
+- **Isolation**: Tests run in a clean environment every time
+- **Dependencies**: All required system dependencies are pre-installed
+- **Reproducibility**: Easy to debug CI failures locally
+
+## Dockerfile configuration
+
+Here's a production-ready Dockerfile for Chroma:
+
+<CodeGroup>
+```dockerfile Dockerfile
+# Dockerfile for Chroma E2E Testing
+# This image is optimized for running Playwright tests with wallet extensions
+
+FROM mcr.microsoft.com/playwright:v1.58.0-noble
+
+# Set environment variables
+ENV CI=true
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DISPLAY=:99
+
+# Install unzip (required for Bun installation)
+RUN apt-get update && apt-get install -y unzip && rm -rf /var/lib/apt/lists/*
+
+# Install Bun
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:${PATH}"
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package.json bun.lock ./
+COPY packages/chroma/package.json ./packages/chroma/
+COPY packages/e2e-polkadot-js/package.json ./packages/e2e-polkadot-js/
+COPY packages/e2e-evm/package.json ./packages/e2e-evm/
+
+# Install dependencies (ignore scripts as chroma isn't built yet)
+RUN bun install --ignore-scripts
+
+# Copy the rest of the source code
+COPY . .
+
+# Build the Chroma package
+RUN cd packages/chroma && bun run build
+
+# Re-run install to link the chroma CLI bin after build
+RUN bun install
+
+# Set working directory back to app root
+WORKDIR /app
+
+# E2E_TARGET env var to specify which e2e package to test (required)
+# Examples: polkadot-js, evm, solana (will prepend e2e- automatically)
+ENV E2E_TARGET=""
+
+# Default command: prepare and run tests for specified E2E_TARGET
+CMD ["sh", "-c", "xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' -- sh -c 'cd /app/packages/e2e-$E2E_TARGET && bun run test:prepare && npx playwright test --reporter=html'"]
+```
+</CodeGroup>
+
+## Dockerfile breakdown
+
+<Steps>
+  <Step title="Base image">
+    Start with Microsoft's official Playwright image:
+
+    ```dockerfile
+    FROM mcr.microsoft.com/playwright:v1.58.0-noble
+    ```
+
+    This includes:
+    - Ubuntu Noble (24.04)
+    - Chromium, Firefox, and WebKit browsers
+    - System dependencies for Playwright
+  </Step>
+
+  <Step title="Environment variables">
+    Configure the container environment:
+
+    ```dockerfile
+    ENV CI=true
+    ENV DEBIAN_FRONTEND=noninteractive
+    ENV DISPLAY=:99
+    ```
+
+    <Note>
+      `DISPLAY=:99` tells X11 applications to use the virtual display created by xvfb.
+    </Note>
+  </Step>
+
+  <Step title="Layer caching optimization">
+    Copy package files before source code for better Docker layer caching:
+
+    ```dockerfile
+    COPY package.json bun.lock ./
+    COPY packages/chroma/package.json ./packages/chroma/
+    # ... other package.json files
+
+    RUN bun install --ignore-scripts
+
+    COPY . .
+    ```
+
+    This means dependencies are only reinstalled when package files change.
+  </Step>
+
+  <Step title="Build Chroma">
+    Build the Chroma package and link the CLI:
+
+    ```dockerfile
+    RUN cd packages/chroma && bun run build
+    RUN bun install
+    ```
+  </Step>
+
+  <Step title="Runtime configuration">
+    Set up the default command with xvfb:
+
+    ```dockerfile
+    CMD ["sh", "-c", "xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' -- sh -c 'cd /app/packages/e2e-$E2E_TARGET && bun run test:prepare && npx playwright test --reporter=html'"]
+    ```
+  </Step>
+</Steps>
+
+## Building the image
+
+Build the Docker image from your project root:
+
+```bash
+docker build -t chroma-test .
+```
+
+<Tip>
+  Tag your image with a version for better tracking: `docker build -t chroma-test:v1.0.0 .`
+</Tip>
+
+## Running tests
+
+### Basic usage
+
+Run tests for a specific target:
+
+```bash
+# Run Polkadot-JS tests
+docker run --rm --shm-size=2gb -e E2E_TARGET=polkadot-js chroma-test
+
+# Run EVM tests
+docker run --rm --shm-size=2gb -e E2E_TARGET=evm chroma-test
+```
+
+<Warning>
+  Always set `--shm-size=2gb` or higher. Chromium requires shared memory for multiprocess architecture. Without it, tests will crash.
+</Warning>
+
+### With volume mounts
+
+Mount volumes to access test reports and results:
+
+```bash
+docker run --rm --shm-size=2gb \
+  -e E2E_TARGET=polkadot-js \
+  -v $(pwd)/playwright-report:/app/packages/e2e-polkadot-js/playwright-report \
+  -v $(pwd)/test-results:/app/packages/e2e-polkadot-js/test-results \
+  chroma-test
+```
+
+After tests complete, reports are available in your local `./playwright-report` directory.
+
+### Interactive debugging
+
+Launch an interactive shell to debug issues:
+
+```bash
+docker run -it --rm --shm-size=2gb chroma-test bash
+```
+
+Inside the container:
+
+```bash
+# Navigate to your test package
+cd packages/e2e-polkadot-js
+
+# Download extensions
+bun run test:prepare
+
+# Run tests
+npx playwright test
+
+# Run specific test
+npx playwright test multi-wallet.spec.ts
+```
+
+## Docker Compose
+
+For more complex setups, use Docker Compose:
+
+<CodeGroup>
+```yaml docker-compose.yml
+version: '3.8'
+
+services:
+  test-polkadot:
+    build: .
+    environment:
+      - E2E_TARGET=polkadot-js
+      - CI=true
+    shm_size: '2gb'
+    volumes:
+      - ./playwright-report:/app/packages/e2e-polkadot-js/playwright-report
+      - ./test-results:/app/packages/e2e-polkadot-js/test-results
+
+  test-evm:
+    build: .
+    environment:
+      - E2E_TARGET=evm
+      - CI=true
+    shm_size: '2gb'
+    volumes:
+      - ./playwright-report:/app/packages/e2e-evm/playwright-report
+      - ./test-results:/app/packages/e2e-evm/test-results
+```
+</CodeGroup>
+
+Run tests:
+
+```bash
+# Run all test suites
+docker compose up
+
+# Run specific suite
+docker compose up test-polkadot
+
+# Run in background
+docker compose up -d
+```
+
+## CI integration
+
+Use Docker in GitHub Actions for consistent CI/CD:
+
+```yaml
+- name: Build Docker image
+  run: docker build -t chroma-test .
+
+- name: Run Playwright tests
+  run: |
+    docker run --rm --shm-size=2gb \
+      -e E2E_TARGET=polkadot-js \
+      -v ${{ github.workspace }}/playwright-report:/app/packages/e2e-polkadot-js/playwright-report \
+      chroma-test
+```
+
+See the [CI/CD integration guide](/guides/ci-cd-integration) for complete examples.
+
+## Performance optimization
+
+<Accordion title="Use multi-stage builds">
+  Reduce final image size by using multi-stage builds:
+
+  ```dockerfile
+  FROM node:24 AS builder
+  WORKDIR /app
+  COPY . .
+  RUN npm install && npm run build
+
+  FROM mcr.microsoft.com/playwright:v1.58.0-noble
+  WORKDIR /app
+  COPY --from=builder /app/dist ./dist
+  COPY --from=builder /app/node_modules ./node_modules
+  ```
+</Accordion>
+
+<Accordion title="Cache dependencies">
+  Use BuildKit cache mounts for faster builds:
+
+  ```dockerfile
+  # Enable BuildKit
+  # syntax=docker/dockerfile:1
+
+  RUN --mount=type=cache,target=/root/.bun/install/cache \
+      bun install
+  ```
+
+  Build with:
+  ```bash
+  DOCKER_BUILDKIT=1 docker build -t chroma-test .
+  ```
+</Accordion>
+
+<Accordion title="Use .dockerignore">
+  Exclude unnecessary files from the build context:
+
+  ```text .dockerignore
+  node_modules
+  .git
+  .github
+  playwright-report
+  test-results
+  *.md
+  .chroma
+  ```
+</Accordion>
+
+## Common Docker commands
+
+```bash
+# List images
+docker images
+
+# Remove image
+docker rmi chroma-test
+
+# View running containers
+docker ps
+
+# View logs
+docker logs <container-id>
+
+# Stop all containers
+docker stop $(docker ps -aq)
+
+# Clean up everything
+docker system prune -a
+```
+
+## Troubleshooting
+
+<Accordion title="Tests crash with 'Target closed' error">
+  Increase shared memory size:
+
+  ```bash
+  docker run --rm --shm-size=4gb -e E2E_TARGET=polkadot-js chroma-test
+  ```
+</Accordion>
+
+<Accordion title="Extensions not found">
+  Ensure `test:prepare` runs before tests:
+
+  ```dockerfile
+  CMD ["sh", "-c", "cd /app/packages/e2e-$E2E_TARGET && bun run test:prepare && npx playwright test"]
+  ```
+</Accordion>
+
+<Accordion title="Slow build times">
+  - Use `.dockerignore` to exclude unnecessary files
+  - Enable BuildKit caching
+  - Order Dockerfile commands from least to most frequently changed
+</Accordion>

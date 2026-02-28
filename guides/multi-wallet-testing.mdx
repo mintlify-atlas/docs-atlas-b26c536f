@@ -1,0 +1,206 @@
+---
+title: Multi-wallet testing
+description: Learn how to test with multiple wallet extensions simultaneously using Chroma's worker-scoped fixtures
+---
+
+Chroma allows you to test with multiple wallet extensions in the same test, enabling you to simulate complex scenarios like wallet switching, cross-wallet comparisons, and multi-user interactions.
+
+## How multi-wallet tests work
+
+Chroma uses Playwright's worker-scoped fixtures to ensure that each wallet extension runs in an isolated browser context. This means:
+
+- Each wallet gets its own persistent context that survives across tests
+- Wallets don't interfere with each other
+- You can import accounts once and reuse them across multiple tests
+- Tests run efficiently without recreating browser contexts
+
+## Basic multi-wallet setup
+
+<Steps>
+  <Step title="Configure multiple wallets">
+    Pass an array of wallet configurations to `createWalletTest`:
+
+    ```typescript
+    import { createWalletTest } from '@avalix/chroma'
+
+    const test = createWalletTest({
+      wallets: [
+        { type: 'polkadot-js' },
+        { type: 'talisman' },
+      ] as const,
+    })
+    ```
+  </Step>
+
+  <Step title="Access wallets in tests">
+    Access each wallet through the `wallets` fixture:
+
+    ```typescript
+    test('import accounts to multiple wallets', async ({ wallets }) => {
+      const polkadotJs = wallets['polkadot-js']
+      const talisman = wallets.talisman
+
+      // Import account to Polkadot-JS
+      await polkadotJs.importMnemonic({
+        seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+        name: 'Alice (Polkadot-JS)',
+        password: 'h3llop0lkadot!',
+      })
+
+      // Import to Talisman
+      await talisman.importEthPrivateKey({
+        privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+        name: 'Bob (Talisman)',
+        password: 'h3llop0lkadot!',
+      })
+    })
+    ```
+  </Step>
+
+  <Step title="Interact with your dApp">
+    Use different wallets to authorize and sign transactions:
+
+    ```typescript
+    test('connect with specific wallet', async ({ page, wallets }) => {
+      const polkadotJs = wallets['polkadot-js']
+
+      // Import account first
+      await polkadotJs.importMnemonic({
+        seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+        name: 'Test Account',
+      })
+
+      // Navigate to dApp
+      await page.goto('https://polkadot.js.org/apps')
+      await page.waitForTimeout(2000)
+
+      // Authorize with Polkadot-JS
+      await polkadotJs.authorize()
+    })
+    ```
+  </Step>
+</Steps>
+
+## Testing wallet switching
+
+Test scenarios where users switch between different wallet extensions:
+
+```typescript
+const test = createWalletTest({
+  wallets: [
+    { type: 'polkadot-js' },
+    { type: 'talisman' },
+  ] as const,
+})
+
+test('switch between wallets', async ({ page, wallets }) => {
+  const polkadotJs = wallets['polkadot-js']
+  const talisman = wallets.talisman
+
+  // Setup both wallets
+  await polkadotJs.importMnemonic({
+    seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+    name: 'Alice',
+  })
+
+  await talisman.importMnemonic({
+    seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+    name: 'Alice',
+  })
+
+  // Connect with first wallet
+  await page.goto('http://localhost:3000')
+  await page.click('button:has-text("Connect Wallet")')
+  await polkadotJs.authorize()
+
+  // Disconnect and switch to second wallet
+  await page.click('button:has-text("Disconnect")')
+  await page.click('button:has-text("Connect Wallet")')
+  await talisman.authorize()
+})
+```
+
+## Configuration options
+
+<Accordion title="headless mode">
+  Run tests with visible browsers for debugging:
+
+  ```typescript
+  const test = createWalletTest({
+    wallets: [
+      { type: 'polkadot-js' },
+      { type: 'talisman' },
+    ] as const,
+    headless: false,
+  })
+  ```
+</Accordion>
+
+<Accordion title="slowMo">
+  Slow down operations to observe what's happening:
+
+  ```typescript
+  const test = createWalletTest({
+    wallets: [
+      { type: 'polkadot-js' },
+      { type: 'talisman' },
+    ] as const,
+    slowMo: 150, // 150ms delay between actions
+  })
+  ```
+</Accordion>
+
+## Real-world example
+
+Here's a complete example from Chroma's test suite:
+
+<CodeGroup>
+```typescript multi-wallet.spec.ts
+import { createWalletTest } from '@avalix/chroma'
+
+const multiWalletTest = createWalletTest({
+  wallets: [
+    { type: 'polkadot-js' },
+    { type: 'talisman' },
+  ] as const,
+  headless: false,
+  slowMo: 150,
+})
+
+multiWalletTest.describe('Multi-Wallet Tests', () => {
+  multiWalletTest('should import accounts to multiple wallets', async ({ wallets }) => {
+    const polkadotJs = wallets['polkadot-js']
+
+    // Import account to Polkadot-JS
+    await polkadotJs.importMnemonic({
+      seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+      name: 'Alice (Polkadot-JS)',
+      password: 'h3llop0lkadot!',
+    })
+
+    // Import to Talisman
+    const talisman = wallets.talisman
+    await talisman.importEthPrivateKey({
+      privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      name: 'Bob (Talisman)',
+      password: 'h3llop0lkadot!',
+    })
+  })
+})
+```
+</CodeGroup>
+
+<Note>
+  Worker-scoped fixtures mean that wallet contexts persist across tests within the same worker. Import accounts in a `beforeAll` hook to reuse them across multiple tests.
+</Note>
+
+## Best practices
+
+<Tip>
+  Use descriptive account names that include the wallet type to make it easier to identify which wallet you're testing with.
+</Tip>
+
+- Import accounts in `beforeAll` hooks to avoid redundant setup
+- Use meaningful test names that describe which wallet is being tested
+- Set `headless: false` and `slowMo` during development to observe wallet behavior
+- Clean up by disconnecting wallets after each test to start fresh

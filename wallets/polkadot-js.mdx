@@ -1,0 +1,286 @@
+---
+title: Polkadot-JS wallet
+description: Automated testing with Polkadot-JS extension using Chroma
+---
+
+The Polkadot-JS extension is the most popular wallet for Polkadot and Substrate-based chains. Chroma provides automated control over the extension for testing dApps that integrate with Polkadot-JS.
+
+## Configuration
+
+Chroma uses Polkadot-JS extension version **0.62.6**:
+
+```typescript
+const POLKADOT_JS_CONFIG = {
+  downloadUrl: 'https://github.com/polkadot-js/extension/releases/download/v0.62.6/master-chrome-build.zip',
+  extensionName: 'polkadot-extension-0.62.6'
+}
+```
+
+<Note>
+The extension is automatically downloaded from the [official Polkadot-JS releases](https://github.com/polkadot-js/extension/releases) when you run `npx @avalix/chroma download-extensions`.
+</Note>
+
+## Setup
+
+Add Polkadot-JS wallet to your test configuration:
+
+```typescript
+import { createWalletTest } from '@avalix/chroma'
+
+const test = createWalletTest({
+  wallets: [{ type: 'polkadot-js' }]
+})
+```
+
+Access the wallet in your tests:
+
+```typescript
+test('connect polkadot-js wallet', async ({ page, wallets }) => {
+  const wallet = wallets['polkadot-js']
+  // Use wallet methods
+})
+```
+
+## Methods
+
+### importMnemonic
+
+Imports an account using a seed phrase (mnemonic).
+
+```typescript
+await wallets['polkadot-js'].importMnemonic({
+  seed: string,
+  name?: string,
+  password?: string
+}): Promise<void>
+```
+
+<ParamField path="seed" type="string" required>
+  The 12 or 24-word mnemonic seed phrase for the account.
+</ParamField>
+
+<ParamField path="name" type="string" default="Test Account">
+  Display name for the account in the wallet.
+</ParamField>
+
+<ParamField path="password" type="string" default="h3llop0lkadot!">
+  Password to encrypt the account. Used when signing transactions.
+</ParamField>
+
+#### Example
+
+```typescript polkadot.spec.ts
+const DOT_TEST_MNEMONIC = 'bottom drive obey lake curtain smoke basket hold race lonely fit walk'
+
+test.beforeAll(async ({ wallets }) => {
+  await wallets['polkadot-js'].importMnemonic({
+    seed: DOT_TEST_MNEMONIC,
+    name: '// Alice',
+  })
+})
+```
+
+<Note>
+
+</Note>
+
+### authorize
+
+Authorizes the dApp to connect to the wallet. This approves the connection request popup that appears when a dApp calls `web3Enable()`.
+
+```typescript
+await wallets['polkadot-js'].authorize(): Promise<void>
+```
+
+#### Example
+
+```typescript polkadot.spec.ts
+test('sign transaction on polkadot starter', async ({ page, wallets }) => {
+  await page.goto('https://polkadot-starter-vue-dedot.vercel.app/')
+  await page.getByRole('button', { name: /Connect Wallet/i }).click()
+  
+  // Approve connection in Polkadot-JS popup
+  await wallets['polkadot-js'].authorize()
+  
+  await page.getByText('// Alice').click()
+})
+```
+
+<Note>
+
+</Note>
+
+### approveTx
+
+Approves a transaction by entering the password and clicking the sign button.
+
+```typescript
+await wallets['polkadot-js'].approveTx(options?: {
+  password?: string
+}): Promise<void>
+```
+
+<ParamField path="options.password" type="string" default="h3llop0lkadot!">
+  Password to unlock the account for signing. Must match the password used during import.
+</ParamField>
+
+#### Example
+
+```typescript polkadot.spec.ts
+test('sign transaction on polkadot starter', async ({ page, wallets }) => {
+  // ... connect wallet and navigate to dApp ...
+  
+  // Trigger transaction in dApp
+  await page.getByRole('button', { name: 'Sign Transaction' }).nth(3).click()
+  
+  // Approve in Polkadot-JS popup
+  await wallets['polkadot-js'].approveTx()
+  
+  await page.getByText('Processing transaction...').waitFor({ state: 'visible' })
+})
+```
+
+<Note>
+
+</Note>
+
+### rejectTx
+
+Rejects a pending transaction by clicking the cancel button.
+
+```typescript
+await wallets['polkadot-js'].rejectTx(): Promise<void>
+```
+
+#### Example
+
+```typescript polkadot.spec.ts
+test('reject transaction', async ({ page, wallets }) => {
+  // ... connect wallet and navigate to dApp ...
+  
+  // Trigger transaction in dApp
+  await page.getByRole('button', { name: 'Sign Transaction' }).first().click()
+  
+  // Reject in Polkadot-JS popup
+  await wallets['polkadot-js'].rejectTx()
+  
+  await page.getByText('Error: Cancelled').waitFor({ state: 'visible' })
+})
+```
+
+<Note>
+
+</Note>
+
+## Complete example
+
+Here's a full test that imports an account, connects the wallet, and signs a transaction:
+
+```typescript polkadot.spec.ts
+import { createWalletTest } from '@avalix/chroma'
+
+const POLKADOT_DAPP_URL = 'https://polkadot-starter-vue-dedot.vercel.app/'
+const ACCOUNT_NAME = '// Alice'
+const DOT_TEST_MNEMONIC = 'bottom drive obey lake curtain smoke basket hold race lonely fit walk'
+
+const test = createWalletTest({
+  headless: false,
+})
+
+test.describe('with polkadot-js wallet', () => {
+  test.beforeAll(async ({ wallets }) => {
+    await wallets['polkadot-js'].importMnemonic({
+      seed: DOT_TEST_MNEMONIC,
+      name: ACCOUNT_NAME,
+    })
+  })
+
+  test('sign transaction on polkadot starter', async ({ page, wallets }) => {
+    await page.goto(POLKADOT_DAPP_URL)
+    await page.waitForLoadState('networkidle')
+
+    await page.getByRole('button', { name: /Connect Wallet/i }).click()
+
+    const modalVisible = await page.locator('h2:has-text("CONNECT WALLET")').isVisible()
+    if (modalVisible) {
+      await page.getByRole('button', { name: /CONNECT/i }).nth(2).click()
+    }
+
+    await wallets['polkadot-js'].authorize()
+    await page.getByText(ACCOUNT_NAME).click()
+
+    // Reject transaction
+    await page.getByRole('button', { name: 'Sign Transaction' }).first().click()
+    await wallets['polkadot-js'].rejectTx()
+    await page.getByText('Error: Cancelled').waitFor({ state: 'visible' })
+
+    // Sign transaction
+    await page.getByRole('button', { name: 'Sign Transaction' }).nth(3).click()
+    await wallets['polkadot-js'].approveTx()
+    await page.getByText('Processing transaction...').waitFor({ state: 'visible' })
+  })
+})
+```
+
+## Extension path helper
+
+Chroma provides a helper to get the extension path for advanced use cases:
+
+```typescript
+import { getPolkadotJSExtensionPath } from '@avalix/chroma/wallets/polkadot-js'
+
+const extensionPath = await getPolkadotJSExtensionPath()
+// Returns: /path/to/project/.chroma/polkadot-extension-0.62.6
+```
+
+<Warning>
+If the extension hasn't been downloaded, `getPolkadotJSExtensionPath()` will throw an error instructing you to run `npx @avalix/chroma download-extensions`.
+</Warning>
+
+## Implementation details
+
+### Extension popup detection
+
+Chroma automatically finds and interacts with the Polkadot-JS extension popup using retry logic:
+
+- Maximum 10 attempts with 500ms delay between retries
+- Searches for pages matching `chrome-extension://{extensionId}/`
+- Waits for `domcontentloaded` state before interaction
+
+### Password management
+
+The default password `h3llop0lkadot!` is used for test accounts. You can override this when importing accounts:
+
+```typescript
+await wallets['polkadot-js'].importMnemonic({
+  seed: 'your mnemonic here',
+  name: 'My Account',
+  password: 'custom-password-123'
+})
+
+// Use the same password when approving transactions
+await wallets['polkadot-js'].approveTx({ password: 'custom-password-123' })
+```
+
+## TypeScript types
+
+The Polkadot-JS wallet instance type is auto-inferred:
+
+```typescript
+import type { PolkadotJsWalletInstance } from '@avalix/chroma'
+
+type PolkadotJsWallet = {
+  extensionId: string
+  type: 'polkadot-js'
+  importMnemonic: (options: WalletAccount) => Promise<void>
+  authorize: () => Promise<void>
+  approveTx: (options?: { password?: string }) => Promise<void>
+  rejectTx: () => Promise<void>
+}
+```
+
+## Related resources
+
+- [Polkadot-JS Extension GitHub](https://github.com/polkadot-js/extension)
+- [Polkadot-JS Extension Documentation](https://polkadot.js.org/docs/extension/)
+- [Substrate Developer Hub](https://substrate.io/developers/)

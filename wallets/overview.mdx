@@ -1,0 +1,221 @@
+---
+title: Wallet support overview
+description: Overview of supported wallet extensions for automated testing with Chroma
+---
+
+Chroma provides first-class support for automated testing with popular Web3 wallet extensions. Each wallet is automatically downloaded, configured, and ready to use in your Playwright tests.
+
+## Supported wallets
+
+Chroma currently supports three major wallet extensions:
+
+| Wallet | Type | Version | Use case |
+|--------|------|---------|----------|
+| [Polkadot-JS](/wallets/polkadot-js) | Substrate | 0.62.6 | Polkadot and Substrate-based chains |
+| [Talisman](/wallets/talisman) | Multi-chain | 3.2.0 | Both Polkadot and Ethereum chains |
+| [MetaMask](/wallets/metamask) | EVM | 13.17.0 | Ethereum and EVM-compatible chains |
+
+## Quick start
+
+To use wallets in your tests, specify them in the `createWalletTest` configuration:
+
+```typescript
+import { createWalletTest } from '@avalix/chroma'
+
+const test = createWalletTest({
+  wallets: [
+    { type: 'polkadot-js' },
+    { type: 'talisman' },
+    { type: 'metamask' }
+  ]
+})
+```
+
+Access wallets in your tests via the `wallets` fixture:
+
+```typescript
+test('connect wallet', async ({ page, wallets }) => {
+  await wallets['polkadot-js'].authorize()
+})
+```
+
+## Automatic extension management
+
+Chroma automatically handles wallet extension setup:
+
+1. **Download** - Extensions are downloaded to `.chroma/` directory
+2. **Installation** - Extensions are loaded into the browser context
+3. **Configuration** - Extensions are pre-configured for testing
+
+<Note>
+Run `npx @avalix/chroma download-extensions` to download all wallet extensions before running tests.
+</Note>
+
+## Common workflows
+
+All wallets support these core operations:
+
+### Import accounts
+
+Each wallet provides methods to import test accounts:
+
+<CodeGroup>
+```typescript Polkadot-JS
+await wallets['polkadot-js'].importMnemonic({
+  seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+  name: '// Alice'
+})
+```
+
+```typescript Talisman
+await wallets.talisman.importPolkadotMnemonic({
+  seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+  name: 'Test Account'
+})
+```
+
+```typescript MetaMask
+await wallets.metamask.importSeedPhrase({
+  seedPhrase: 'test test test test test test test test test test test junk'
+})
+```
+</CodeGroup>
+
+### Authorize dApp connections
+
+Approve wallet connections to your dApp:
+
+<CodeGroup>
+```typescript Polkadot-JS
+await wallets['polkadot-js'].authorize()
+```
+
+```typescript Talisman
+await wallets.talisman.authorize({ accountName: 'Test Account' })
+```
+
+```typescript MetaMask
+await wallets.metamask.authorize()
+```
+</CodeGroup>
+
+### Approve transactions
+
+Sign and approve transactions:
+
+<CodeGroup>
+```typescript Polkadot-JS
+await wallets['polkadot-js'].approveTx({ password: 'h3llop0lkadot!' })
+```
+
+```typescript Talisman
+await wallets.talisman.approveTx()
+```
+
+```typescript MetaMask
+await wallets.metamask.confirm()
+```
+</CodeGroup>
+
+### Reject transactions
+
+Test transaction rejection flows:
+
+<CodeGroup>
+```typescript Polkadot-JS
+await wallets['polkadot-js'].rejectTx()
+```
+
+```typescript Talisman
+await wallets.talisman.rejectTx()
+```
+
+```typescript MetaMask
+await wallets.metamask.reject()
+```
+</CodeGroup>
+
+## Wallet-specific features
+
+### Talisman multi-chain support
+
+Talisman supports both Polkadot and Ethereum chains:
+
+```typescript
+// Import Polkadot account
+await wallets.talisman.importPolkadotMnemonic({
+  seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+  name: 'DOT Account'
+})
+
+// Import Ethereum account
+await wallets.talisman.importEthPrivateKey({
+  privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+  name: 'ETH Account'
+})
+```
+
+### MetaMask unlock
+
+MetaMask requires unlocking after browser restart:
+
+```typescript
+await wallets.metamask.unlock()
+```
+
+## Extension configuration
+
+Each wallet has specific configuration constants:
+
+<Tabs>
+  <Tab title="Polkadot-JS">
+    ```typescript
+    const POLKADOT_JS_CONFIG = {
+      downloadUrl: 'https://github.com/polkadot-js/extension/releases/download/v0.62.6/master-chrome-build.zip',
+      extensionName: 'polkadot-extension-0.62.6'
+    }
+    ```
+  </Tab>
+  <Tab title="Talisman">
+    ```typescript
+    const TALISMAN_CONFIG = {
+      downloadUrl: 'https://github.com/avalix-labs/polkadot-wallets/raw/refs/heads/main/talisman/talisman-3.2.0.zip',
+      extensionName: 'talisman-extension-3.2.0'
+    }
+    ```
+  </Tab>
+  <Tab title="MetaMask">
+    ```typescript
+    const METAMASK_CONFIG = {
+      downloadUrl: 'https://github.com/MetaMask/metamask-extension/releases/download/v13.17.0/metamask-flask-chrome-13.17.0-flask.0.zip',
+      extensionName: 'metamask-extension-13.17.0'
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Best practices
+
+<Warning>
+Use test mnemonics and private keys only. Never use real funds or production credentials in automated tests.
+</Warning>
+
+- **Use consistent test accounts** - Define test mnemonics as constants for reusability
+- **Handle async operations** - All wallet methods are async and return Promises
+- **Test both approve and reject** - Cover both happy paths and rejection scenarios
+- **Wait for confirmation** - Use Playwright's `waitFor` to ensure transactions complete
+- **Clean up after tests** - Extensions are automatically cleaned up between test runs
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="Polkadot-JS" icon="link" href="/wallets/polkadot-js">
+    Complete Polkadot-JS wallet API reference
+  </Card>
+  <Card title="Talisman" icon="link" href="/wallets/talisman">
+    Complete Talisman wallet API reference
+  </Card>
+  <Card title="MetaMask" icon="link" href="/wallets/metamask">
+    Complete MetaMask wallet API reference
+  </Card>
+</CardGroup>

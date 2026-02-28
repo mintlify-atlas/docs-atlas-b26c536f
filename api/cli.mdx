@@ -1,0 +1,243 @@
+---
+title: CLI commands
+description: Command-line interface for Chroma
+---
+
+## Overview
+
+Chroma provides a CLI for downloading wallet browser extensions required for testing.
+
+## Installation
+
+The CLI is available when you install Chroma:
+
+```bash
+npm install @commonwealth/chroma --save-dev
+```
+
+## Commands
+
+### download-extensions
+
+Download all supported wallet extensions to your project.
+
+**Usage**:
+
+```bash
+npx chroma download-extensions
+```
+
+**What it does**:
+
+1. Clears any existing `.chroma` directory in your project root
+2. Downloads the following wallet extensions:
+   - Polkadot-JS extension
+   - Talisman extension
+   - MetaMask extension
+3. Extracts each extension to `.chroma/[extension-name]/`
+
+**Output**:
+
+```bash
+🎨 Chroma v1.0.0
+🚀 Downloading wallet extensions...
+
+🗑️ Clearing existing .chroma directory...
+
+📥 Downloading polkadot-js...
+📦 Extracting extension...
+✅ polkadot-js downloaded and extracted to: /path/to/project/.chroma/polkadot-js
+
+📥 Downloading talisman...
+📦 Extracting extension...
+✅ talisman downloaded and extracted to: /path/to/project/.chroma/talisman
+
+📥 Downloading metamask...
+📦 Extracting extension...
+✅ metamask downloaded and extracted to: /path/to/project/.chroma/metamask
+
+✅ All extensions downloaded successfully!
+You can now run your Playwright tests.
+```
+
+**When to use**:
+
+- During initial setup of your test environment
+- In CI/CD pipelines before running tests
+- When you need to update to the latest extension versions
+- After cleaning your project directory
+
+**Example in package.json**:
+
+```json
+{
+  "scripts": {
+    "test:setup": "chroma download-extensions",
+    "test": "playwright test",
+    "test:all": "npm run test:setup && npm run test"
+  }
+}
+```
+
+## Download locations
+
+Extensions are downloaded to:
+
+```
+project-root/
+  .chroma/
+    polkadot-js/
+      manifest.json
+      ...
+    talisman/
+      manifest.json
+      ...
+    metamask/
+      manifest.json
+      ...
+```
+
+<Note>
+Add `.chroma/` to your `.gitignore` file to avoid committing extension files to your repository.
+</Note>
+
+## CI/CD integration
+
+<Tabs>
+  <Tab title="GitHub Actions">
+    ```yaml
+    name: E2E Tests
+    
+    on: [push, pull_request]
+    
+    jobs:
+      test:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v3
+          
+          - name: Setup Node.js
+            uses: actions/setup-node@v3
+            with:
+              node-version: '18'
+              
+          - name: Install dependencies
+            run: npm ci
+            
+          - name: Download wallet extensions
+            run: npx chroma download-extensions
+            
+          - name: Run Playwright tests
+            run: npx playwright test
+    ```
+  </Tab>
+  
+  <Tab title="GitLab CI">
+    ```yaml
+    e2e-tests:
+      image: mcr.microsoft.com/playwright:v1.40.0-focal
+      script:
+        - npm ci
+        - npx chroma download-extensions
+        - npx playwright test
+    ```
+  </Tab>
+  
+  <Tab title="CircleCI">
+    ```yaml
+    version: 2.1
+    
+    jobs:
+      test:
+        docker:
+          - image: mcr.microsoft.com/playwright:v1.40.0-focal
+        steps:
+          - checkout
+          - run: npm ci
+          - run: npx chroma download-extensions
+          - run: npx playwright test
+    ```
+  </Tab>
+</Tabs>
+
+## Caching extensions
+
+To speed up CI builds, you can cache the `.chroma` directory:
+
+<CodeGroup>
+
+```yaml GitHub Actions
+- name: Cache wallet extensions
+  uses: actions/cache@v3
+  with:
+    path: .chroma
+    key: chroma-extensions-${{ hashFiles('package-lock.json') }}
+    restore-keys: |
+      chroma-extensions-
+
+- name: Download wallet extensions
+  run: npx chroma download-extensions
+```
+
+```yaml GitLab CI
+cache:
+  key: chroma-extensions
+  paths:
+    - .chroma/
+
+script:
+  - npx chroma download-extensions
+```
+
+</CodeGroup>
+
+## Custom download URLs
+
+If you need to use specific versions or custom builds of wallet extensions, you can provide custom download URLs in your test configuration:
+
+```typescript
+import { createWalletTest } from '@commonwealth/chroma'
+
+const test = createWalletTest({
+  wallets: [
+    {
+      type: 'polkadot-js',
+      downloadUrl: 'https://example.com/custom-polkadot-js-v1.2.3.zip',
+    },
+  ],
+})
+```
+
+Note that when using custom URLs, the `download-extensions` command will still download the default versions. You'll need to manually download and place custom extensions in the `.chroma` directory.
+
+## Troubleshooting
+
+### Extensions not found
+
+If tests fail with "extension not found" errors:
+
+1. Run `npx chroma download-extensions` to download extensions
+2. Verify `.chroma` directory exists in your project root
+3. Check that `.chroma` is not in your `.gitignore` if you're running in CI
+
+### Download failures
+
+If the download command fails:
+
+1. Check your internet connection
+2. Verify you're not behind a firewall blocking extension downloads
+3. Try running with increased timeout: `CHROMA_DOWNLOAD_TIMEOUT=60000 npx chroma download-extensions`
+4. Check GitHub rate limits if downloading from GitHub releases
+
+### Permission errors
+
+If you get permission errors when extracting extensions:
+
+1. Ensure your user has write permissions to the project directory
+2. On CI, verify the build user has write access
+3. Try deleting the `.chroma` directory and running the command again
+
+## Related
+
+- [Installation](/installation) - Initial setup guide
+- [createWalletTest](/api/create-wallet-test) - Test configuration

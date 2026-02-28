@@ -1,0 +1,359 @@
+---
+title: Talisman wallet
+description: Automated testing with Talisman wallet extension using Chroma
+---
+
+Talisman is a multi-chain wallet that supports both Polkadot/Substrate and Ethereum chains. Chroma provides full automation for testing dApps that integrate with Talisman wallet.
+
+## Configuration
+
+Chroma uses Talisman wallet version **3.2.0**:
+
+```typescript
+const TALISMAN_CONFIG = {
+  downloadUrl: 'https://github.com/avalix-labs/polkadot-wallets/raw/refs/heads/main/talisman/talisman-3.2.0.zip',
+  extensionName: 'talisman-extension-3.2.0'
+}
+```
+
+<Note>
+The extension is automatically downloaded from the [avalix-labs/polkadot-wallets](https://github.com/avalix-labs/polkadot-wallets) repository when you run `npx @avalix/chroma download-extensions`.
+</Note>
+
+## Setup
+
+Add Talisman wallet to your test configuration:
+
+```typescript
+import { createWalletTest } from '@avalix/chroma'
+
+const test = createWalletTest({
+  wallets: [{ type: 'talisman' }]
+})
+```
+
+Access the wallet in your tests:
+
+```typescript
+test('connect talisman wallet', async ({ page, wallets }) => {
+  const wallet = wallets.talisman
+  // Use wallet methods
+})
+```
+
+## Methods
+
+### importPolkadotMnemonic
+
+Imports a Polkadot/Substrate account using a seed phrase (mnemonic).
+
+```typescript
+await wallets.talisman.importPolkadotMnemonic({
+  seed: string,
+  name?: string,
+  password?: string
+}): Promise<void>
+```
+
+<ParamField path="seed" type="string" required>
+  The 12 or 24-word mnemonic seed phrase for the Polkadot account.
+</ParamField>
+
+<ParamField path="name" type="string" default="Test Account">
+  Display name for the account in Talisman wallet.
+</ParamField>
+
+<ParamField path="password" type="string" default="h3llop0lkadot!">
+  Password to encrypt the wallet. Used during onboarding.
+</ParamField>
+
+#### Example
+
+```typescript talisman-wallet.spec.ts
+const DOT_TEST_MNEMONIC = 'bottom drive obey lake curtain smoke basket hold race lonely fit walk'
+
+test.beforeAll(async ({ wallets }) => {
+  await wallets.talisman.importPolkadotMnemonic({
+    seed: DOT_TEST_MNEMONIC,
+    name: '// Alice',
+  })
+})
+```
+
+<Note>
+
+</Note>
+
+### importEthPrivateKey
+
+Imports an Ethereum account using a private key.
+
+```typescript
+await wallets.talisman.importEthPrivateKey({
+  privateKey: string,
+  name?: string,
+  password?: string
+}): Promise<void>
+```
+
+<ParamField path="privateKey" type="string" required>
+  The Ethereum private key (with or without `0x` prefix).
+</ParamField>
+
+<ParamField path="name" type="string" default="Test Account">
+  Display name for the account in Talisman wallet.
+</ParamField>
+
+<ParamField path="password" type="string" default="h3llop0lkadot!">
+  Password to encrypt the wallet. Used during onboarding.
+</ParamField>
+
+#### Example
+
+```typescript talisman-wallet.spec.ts
+const ETH_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+
+test.beforeAll(async ({ wallets }) => {
+  await wallets.talisman.importEthPrivateKey({
+    privateKey: ETH_PRIVATE_KEY,
+    name: 'Test Account',
+    password: 'h3llop0lkadot!',
+  })
+})
+```
+
+<Note>
+
+</Note>
+
+### authorize
+
+Authorizes the dApp to connect to Talisman wallet. Approves the connection request and selects the specified account.
+
+```typescript
+await wallets.talisman.authorize(options?: {
+  accountName?: string
+}): Promise<void>
+```
+
+<ParamField path="options.accountName" type="string" default="Test Account">
+  Name of the account to connect. Defaults to the most recently imported account name.
+</ParamField>
+
+#### Example
+
+```typescript polkadot.spec.ts
+test('sign transaction with talisman', async ({ page, wallets }) => {
+  await page.goto('https://polkadot-starter-vue-dedot.vercel.app/')
+  await page.getByRole('button', { name: /Connect Wallet/i }).click()
+  
+  // Approve connection in Talisman popup
+  await wallets.talisman.authorize({ accountName: '// Alice' })
+  
+  await page.getByText('// Alice').click()
+})
+```
+
+<Note>
+
+</Note>
+
+### approveTx
+
+Approves a pending transaction in Talisman wallet.
+
+```typescript
+await wallets.talisman.approveTx(): Promise<void>
+```
+
+#### Example
+
+```typescript polkadot.spec.ts
+test('sign transaction with talisman', async ({ page, wallets }) => {
+  // ... connect wallet and navigate to dApp ...
+  
+  // Trigger transaction in dApp
+  await page.getByRole('button', { name: 'Sign Transaction' }).nth(3).click()
+  
+  // Approve in Talisman popup
+  await wallets.talisman.approveTx()
+  
+  await page.getByText('Processing transaction...').waitFor({ state: 'visible' })
+})
+```
+
+<Note>
+
+</Note>
+
+### rejectTx
+
+Rejects a pending transaction in Talisman wallet.
+
+```typescript
+await wallets.talisman.rejectTx(): Promise<void>
+```
+
+#### Example
+
+```typescript polkadot.spec.ts
+test('reject transaction with talisman', async ({ page, wallets }) => {
+  // ... connect wallet and navigate to dApp ...
+  
+  // Trigger transaction in dApp
+  await page.getByRole('button', { name: 'Sign Transaction' }).first().click()
+  
+  // Reject in Talisman popup
+  await wallets.talisman.rejectTx()
+  
+  await page.getByText('Error: Cancelled').waitFor({ state: 'visible' })
+})
+```
+
+<Note>
+
+</Note>
+
+## Complete example
+
+Here's a full test demonstrating Talisman's multi-chain capabilities:
+
+```typescript talisman-complete.spec.ts
+import { createWalletTest } from '@avalix/chroma'
+
+const DOT_TEST_MNEMONIC = 'bottom drive obey lake curtain smoke basket hold race lonely fit walk'
+const ETH_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+
+const test = createWalletTest({
+  wallets: [{ type: 'talisman' }]
+})
+
+test.describe('talisman multi-chain wallet', () => {
+  test('import polkadot account and sign transaction', async ({ page, wallets }) => {
+    // Import Polkadot account
+    await wallets.talisman.importPolkadotMnemonic({
+      seed: DOT_TEST_MNEMONIC,
+      name: 'DOT Account',
+    })
+
+    await page.goto('https://polkadot-starter-vue-dedot.vercel.app/')
+    await page.getByRole('button', { name: /Connect Wallet/i }).click()
+    
+    // Connect Talisman
+    await wallets.talisman.authorize({ accountName: 'DOT Account' })
+    
+    // Sign transaction
+    await page.getByRole('button', { name: 'Sign Transaction' }).first().click()
+    await wallets.talisman.approveTx()
+  })
+
+  test('import ethereum account', async ({ page, wallets }) => {
+    // Import Ethereum account
+    await wallets.talisman.importEthPrivateKey({
+      privateKey: ETH_PRIVATE_KEY,
+      name: 'ETH Account',
+    })
+
+    // Connect to Ethereum dApp
+    await page.goto('https://demo.privy.io')
+    await page.getByRole('button', { name: 'Continue with a wallet' }).click()
+    
+    // Connect Talisman
+    await wallets.talisman.authorize({ accountName: 'ETH Account' })
+  })
+})
+```
+
+## Extension path helper
+
+Chroma provides a helper to get the extension path for advanced use cases:
+
+```typescript
+import { getTalismanExtensionPath } from '@avalix/chroma/wallets/talisman'
+
+const extensionPath = await getTalismanExtensionPath()
+// Returns: /path/to/project/.chroma/talisman-extension-3.2.0
+```
+
+<Warning>
+If the extension hasn't been downloaded, `getTalismanExtensionPath()` will throw an error instructing you to run `npx @avalix/chroma download-extensions`.
+</Warning>
+
+## Implementation details
+
+### Onboarding flow
+
+Talisman requires a one-time onboarding flow that Chroma handles automatically:
+
+1. Click "Get Started" button
+2. Set wallet password
+3. Skip analytics opt-in
+4. Disable risk scan security features for testing
+
+This onboarding happens automatically when you first import an account.
+
+### Extension popup detection
+
+Chroma automatically finds and interacts with the Talisman extension popup:
+
+- Maximum 10 attempts with 500ms delay between retries
+- Searches for pages matching `chrome-extension://{extensionId}/`
+- Sets viewport to 400x600 for consistent popup rendering
+- Waits for `domcontentloaded` state before interaction
+
+### Account name tracking
+
+Talisman wallet internally tracks the last imported account name. When you call `authorize()` without specifying `accountName`, it uses the most recently imported account:
+
+```typescript
+// Import account - name is tracked internally
+await wallets.talisman.importPolkadotMnemonic({
+  seed: 'your mnemonic',
+  name: 'My Account'
+})
+
+// Authorize uses 'My Account' automatically
+await wallets.talisman.authorize()
+
+// Or explicitly specify account
+await wallets.talisman.authorize({ accountName: 'My Account' })
+```
+
+## TypeScript types
+
+The Talisman wallet instance type is auto-inferred:
+
+```typescript
+import type { TalismanWalletInstance } from '@avalix/chroma'
+
+type TalismanWallet = {
+  extensionId: string
+  type: 'talisman'
+  importPolkadotMnemonic: (options: WalletAccount) => Promise<void>
+  importEthPrivateKey: (options: { 
+    privateKey: string
+    name?: string
+    password?: string 
+  }) => Promise<void>
+  authorize: (options?: { accountName?: string }) => Promise<void>
+  approveTx: () => Promise<void>
+  rejectTx: () => Promise<void>
+}
+```
+
+## Best practices
+
+<Warning>
+Talisman supports both Polkadot and Ethereum chains. Make sure you import the correct account type for your dApp.
+</Warning>
+
+- **Use `importPolkadotMnemonic` for Substrate chains** - Polkadot, Kusama, parachains
+- **Use `importEthPrivateKey` for EVM chains** - Ethereum, Polygon, Moonbeam
+- **Track account names** - Use descriptive names to identify accounts in multi-account tests
+- **Handle approval popups** - Some flows may trigger additional approval popups after authorization
+
+## Related resources
+
+- [Talisman Wallet Website](https://talisman.xyz/)
+- [Talisman Documentation](https://docs.talisman.xyz/)
+- [Multi-chain dApp Development](https://docs.talisman.xyz/talisman-connect/introduction)

@@ -1,0 +1,477 @@
+---
+title: Troubleshooting
+description: Common issues and solutions when testing with Chroma
+---
+
+This guide covers common issues you might encounter when using Chroma and how to resolve them.
+
+## Extension issues
+
+<Accordion title="Extension not found">
+  **Error message:**
+  ```
+  Error: Extension not found at path: ./.chroma/polkadot-js-extension
+  Please run: npx chroma download-extensions
+  ```
+
+  **Solution:**
+
+  Download wallet extensions before running tests:
+
+  ```bash
+  npx chroma download-extensions
+  ```
+
+  <Tip>
+    Add this to your `package.json` scripts:
+    ```json
+    {
+      "scripts": {
+        "test:prepare": "chroma download-extensions",
+        "test": "npm run test:prepare && playwright test"
+      }
+    }
+    ```
+  </Tip>
+
+  **Why this happens:**
+
+  Chroma requires wallet extensions to be downloaded locally. The extensions are stored in `./.chroma` and are not included in npm packages due to licensing.
+</Accordion>
+
+<Accordion title="Extension failed to load">
+  **Error message:**
+  ```
+  Error: Extension at path ./.chroma/polkadot-js-extension failed to load
+  ```
+
+  **Solutions:**
+
+  1. Delete the `.chroma` directory and re-download:
+     ```bash
+     rm -rf .chroma
+     npx chroma download-extensions
+     ```
+
+  2. Check file permissions:
+     ```bash
+     ls -la .chroma/
+     chmod -R 755 .chroma/
+     ```
+
+  3. Verify the extension directory exists and is not empty:
+     ```bash
+     ls -la .chroma/polkadot-js-extension/
+     ```
+</Accordion>
+
+<Accordion title="Wrong extension version">
+  **Issue:** Tests fail after extension updates.
+
+  **Solution:**
+
+  Re-download extensions to get the latest versions:
+
+  ```bash
+  rm -rf .chroma
+  npx chroma download-extensions
+  ```
+
+  **Supported versions:**
+  - Polkadot JS Extension: v0.62.6
+  - Talisman: v3.1.13
+  - MetaMask: v13.17.0 (Flask)
+</Accordion>
+
+## CI/CD issues
+
+<Accordion title="Tests pass locally but fail in CI">
+  **Common causes and solutions:**
+
+  1. **Extensions not downloaded in CI:**
+
+     Add the download step to your workflow:
+
+     ```yaml
+     - name: Download wallet extensions
+       run: npx chroma download-extensions
+     ```
+
+  2. **Missing xvfb for headless display:**
+
+     Use `xvfb-run` in CI environments:
+
+     ```yaml
+     - name: Run tests
+       run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" -- npx playwright test
+     ```
+
+  3. **Playwright browsers not installed:**
+
+     ```yaml
+     - name: Install Playwright browsers
+       run: npx playwright install --with-deps chromium
+     ```
+
+  4. **Environment differences:**
+
+     Set CI environment variable:
+
+     ```yaml
+     env:
+       CI: true
+       DISPLAY: :99
+     ```
+</Accordion>
+
+<Accordion title="Docker tests crash">
+  **Error message:**
+  ```
+  Target closed
+  Browser has been closed
+  ```
+
+  **Solution:**
+
+  Increase shared memory size:
+
+  ```bash
+  docker run --rm --shm-size=2gb -e E2E_TARGET=polkadot-js chroma-test
+  ```
+
+  <Warning>
+    Chromium requires at least 2GB of shared memory. The default Docker allocation (64MB) is insufficient.
+  </Warning>
+
+  For Docker Compose:
+
+  ```yaml
+  services:
+    test:
+      shm_size: '2gb'
+  ```
+</Accordion>
+
+<Accordion title="Slow CI performance">
+  **Optimization strategies:**
+
+  1. **Cache Playwright browsers:**
+
+     ```yaml
+     - name: Cache Playwright browsers
+       uses: actions/cache@v4
+       with:
+         path: ~/.cache/ms-playwright
+         key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+     ```
+
+  2. **Cache node_modules:**
+
+     ```yaml
+     - name: Cache dependencies
+       uses: actions/cache@v4
+       with:
+         path: node_modules
+         key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+     ```
+
+  3. **Run tests in parallel:**
+
+     ```yaml
+     strategy:
+       matrix:
+         shard: [1, 2, 3, 4]
+     steps:
+       - run: npx playwright test --shard=${{ matrix.shard }}/4
+     ```
+</Accordion>
+
+## Test failures
+
+<Accordion title="Timeout waiting for selector">
+  **Error message:**
+  ```
+  Error: Timeout 30000ms exceeded waiting for selector "button:has-text('Connect')"
+  ```
+
+  **Solutions:**
+
+  1. **Increase timeout:**
+
+     ```typescript
+     test.setTimeout(60_000) // 60 seconds
+
+     // Or per action
+     await page.click('button', { timeout: 60000 })
+     ```
+
+  2. **Wait for network idle:**
+
+     ```typescript
+     await page.goto('http://localhost:3000')
+     await page.waitForLoadState('networkidle')
+     ```
+
+  3. **Check if element exists:**
+
+     ```typescript
+     const button = page.locator('button:has-text("Connect")')
+     await button.waitFor({ state: 'visible', timeout: 10000 })
+     await button.click()
+     ```
+
+  4. **Use more specific selectors:**
+
+     ```typescript
+     // Instead of
+     await page.click('button')
+
+     // Use
+     await page.getByRole('button', { name: 'Connect Wallet' }).click()
+     ```
+</Accordion>
+
+<Accordion title="Wallet authorization fails">
+  **Issue:** `authorize()` method times out or doesn't work.
+
+  **Solutions:**
+
+  1. **Ensure account is imported first:**
+
+     ```typescript
+     test('connect wallet', async ({ page, wallets }) => {
+       const polkadotJs = wallets['polkadot-js']
+
+       // Import account BEFORE navigating to dApp
+       await polkadotJs.importMnemonic({
+         seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+         name: 'Alice',
+       })
+
+       // Then navigate and authorize
+       await page.goto('http://localhost:3000')
+       await polkadotJs.authorize()
+     })
+     ```
+
+  2. **Wait for authorization popup:**
+
+     Add a small delay before calling `authorize()`:
+
+     ```typescript
+     await page.click('button:has-text("Connect Wallet")')
+     await page.waitForTimeout(1000) // Wait for extension popup
+     await polkadotJs.authorize()
+     ```
+
+  3. **Check extension context:**
+
+     Ensure the extension loaded correctly:
+
+     ```typescript
+     test('debug extension', async ({ wallets }) => {
+       const polkadotJs = wallets['polkadot-js']
+       console.log('Extension context:', polkadotJs.context)
+     })
+     ```
+</Accordion>
+
+<Accordion title="Transaction approval fails">
+  **Error message:**
+  ```
+  Error: Timeout waiting for transaction approval
+  ```
+
+  **Solutions:**
+
+  1. **Provide password if required:**
+
+     ```typescript
+     await polkadotJs.approveTx({ password: 'h3llop0lkadot!' })
+     ```
+
+  2. **Wait for transaction popup:**
+
+     ```typescript
+     await page.click('button:has-text("Send Transaction")')
+     await page.waitForTimeout(2000) // Wait for tx popup
+     await polkadotJs.approveTx()
+     ```
+
+  3. **Increase method timeout:**
+
+     ```typescript
+     await polkadotJs.approveTx({ 
+       password: 'h3llop0lkadot!',
+       timeout: 60000 // 60 seconds
+     })
+     ```
+</Accordion>
+
+## Multi-wallet issues
+
+<Accordion title="Wallets interfere with each other">
+  **Issue:** One wallet's actions affect another wallet.
+
+  **Solution:**
+
+  Ensure each wallet has its own isolated context:
+
+  ```typescript
+  const test = createWalletTest({
+    wallets: [
+      { type: 'polkadot-js' },
+      { type: 'talisman' },
+    ] as const,
+  })
+
+  test('isolated wallets', async ({ wallets }) => {
+    const polkadotJs = wallets['polkadot-js']
+    const talisman = wallets.talisman
+
+    // These operations are isolated
+    await polkadotJs.importMnemonic({ seed: '...' })
+    await talisman.importMnemonic({ seed: '...' })
+  })
+  ```
+
+  <Note>
+    Chroma uses worker-scoped fixtures to ensure wallet contexts are isolated. Each wallet runs in its own browser context.
+  </Note>
+</Accordion>
+
+<Accordion title="Wrong wallet responds to action">
+  **Issue:** Calling `authorize()` on one wallet, but another wallet's popup appears.
+
+  **Solution:**
+
+  Be explicit about which wallet to use:
+
+  ```typescript
+  // When your dApp shows a wallet picker, click the specific wallet first
+  await page.click('button:has-text("Polkadot JS")')
+  await wallets['polkadot-js'].authorize()
+
+  // Later, for a different wallet
+  await page.click('button:has-text("Talisman")')
+  await wallets.talisman.authorize()
+  ```
+</Accordion>
+
+## Performance issues
+
+<Accordion title="Tests are slow">
+  **Optimization tips:**
+
+  1. **Import accounts once in beforeAll:**
+
+     ```typescript
+     test.beforeAll(async ({ wallets }) => {
+       await wallets['polkadot-js'].importMnemonic({ seed: '...' })
+     })
+
+     // Tests reuse the imported account
+     test('test 1', async ({ wallets }) => { ... })
+     test('test 2', async ({ wallets }) => { ... })
+     ```
+
+  2. **Run tests in parallel:**
+
+     ```typescript
+     // playwright.config.ts
+     export default defineConfig({
+       workers: 4, // Run 4 tests in parallel
+     })
+     ```
+
+  3. **Disable slowMo in CI:**
+
+     ```typescript
+     const test = createWalletTest({
+       wallets: [{ type: 'polkadot-js' }],
+       slowMo: process.env.CI ? 0 : 150,
+     })
+     ```
+
+  4. **Use headless mode:**
+
+     ```typescript
+     const test = createWalletTest({
+       wallets: [{ type: 'polkadot-js' }],
+       headless: true,
+     })
+     ```
+</Accordion>
+
+## Debugging tips
+
+<Warning>
+  When debugging, always run tests in headed mode with slowMo to observe what's happening.
+</Warning>
+
+### Enable debug mode
+
+```typescript
+const test = createWalletTest({
+  wallets: [{ type: 'polkadot-js' }],
+  headless: false,
+  slowMo: 500, // Slow down by 500ms per action
+})
+```
+
+### Add console logs
+
+```typescript
+test('debug test', async ({ page, wallets }) => {
+  const polkadotJs = wallets['polkadot-js']
+
+  console.log('Importing account...')
+  await polkadotJs.importMnemonic({ seed: '...' })
+
+  console.log('Navigating to dApp...')
+  await page.goto('http://localhost:3000')
+
+  console.log('Authorizing...')
+  await polkadotJs.authorize()
+})
+```
+
+### Use Playwright Inspector
+
+```bash
+PWDEBUG=1 npx playwright test
+```
+
+### Take screenshots
+
+```typescript
+test('screenshot example', async ({ page }) => {
+  await page.goto('http://localhost:3000')
+  await page.screenshot({ path: 'screenshot.png' })
+
+  // Or on failure
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status === 'failed') {
+      await page.screenshot({ 
+        path: `failure-${testInfo.title}.png` 
+      })
+    }
+  })
+})
+```
+
+## Getting help
+
+If you're still experiencing issues:
+
+1. Check the [GitHub Issues](https://github.com/avalixcom/chroma/issues) for similar problems
+2. Review the [test examples](https://github.com/avalixcom/chroma/tree/main/packages/chroma/playground-e2e) in the repository
+3. Open a new issue with:
+   - Error message
+   - Minimal reproduction code
+   - Environment details (OS, Node version, Playwright version)
+   - Screenshots or videos if relevant
+
+<Tip>
+  Include the full error stack trace and any relevant logs when reporting issues.
+</Tip>

@@ -1,0 +1,223 @@
+---
+title: Test fixtures
+description: Playwright fixtures provided by Chroma for wallet testing
+---
+
+## Overview
+
+Chroma extends Playwright's test fixtures to provide wallet-specific functionality. Fixtures are automatically set up and torn down for each test.
+
+## Test-scoped fixtures
+
+These fixtures are recreated for each test.
+
+### page
+
+An extended Playwright page with wallet extension context.
+
+**Type**: `ExtendedPage`
+
+```typescript
+type ExtendedPage = Page & {
+  __extensionContext: BrowserContext
+  __walletExtensionIds: Map<string, string>
+}
+```
+
+<ParamField path="__extensionContext" type="BrowserContext">
+  The browser context that contains loaded wallet extensions
+</ParamField>
+
+<ParamField path="__walletExtensionIds" type="Map<string, string>">
+  Map of wallet type to Chrome extension ID
+</ParamField>
+
+**Usage**:
+
+```typescript
+test('navigate with extension context', async ({ page }) => {
+  await page.goto('https://polkadot.js.org/apps/')
+  
+  // Access extension context if needed
+  const extensionId = page.__walletExtensionIds.get('polkadot-js')
+  console.log('Extension ID:', extensionId)
+})
+```
+
+### wallets
+
+Wallet instances for interacting with wallet extensions.
+
+**Type**: `ConfiguredWallets<T>` (based on your configuration)
+
+The wallets object contains instances for each wallet you configured:
+
+<Tabs>
+  <Tab title="Single wallet">
+    ```typescript
+    const test = createWalletTest() // Defaults to polkadot-js
+    
+    test('example', async ({ wallets }) => {
+      // wallets is { 'polkadot-js': PolkadotJsWalletInstance }
+      await wallets['polkadot-js'].importMnemonic({
+        seed: 'your mnemonic here',
+        name: 'Test Account',
+      })
+    })
+    ```
+  </Tab>
+  
+  <Tab title="Multiple wallets">
+    ```typescript
+    const test = createWalletTest({
+      wallets: [
+        { type: 'polkadot-js' },
+        { type: 'talisman' },
+      ] as const,
+    })
+    
+    test('example', async ({ wallets }) => {
+      // wallets is {
+      //   'polkadot-js': PolkadotJsWalletInstance,
+      //   'talisman': TalismanWalletInstance
+      // }
+      await wallets['polkadot-js'].authorize()
+      await wallets.talisman.authorize()
+    })
+    ```
+  </Tab>
+</Tabs>
+
+See [Wallet instances](/api/wallet-instances) for detailed method documentation.
+
+## Worker-scoped fixtures
+
+These fixtures are created once per worker process and persist across all tests in that worker.
+
+### walletContext
+
+The Playwright browser context with wallet extensions loaded.
+
+**Type**: `BrowserContext`
+
+**Scope**: Worker (persists across tests)
+
+This context is created with:
+- All configured wallet extensions loaded
+- Persistent storage enabled
+- Custom Chrome arguments for extension support
+
+**Usage**:
+
+You typically don't need to use this directly, as the `page` fixture provides access to it via `page.__extensionContext`.
+
+```typescript
+test('access browser context', async ({ walletContext }) => {
+  // Get all pages in the context
+  const pages = walletContext.pages()
+  
+  // Create a new page
+  const newPage = await walletContext.newPage()
+})
+```
+
+<Warning>
+Don't close the `walletContext` or its pages manually, as they're shared across tests in the worker.
+</Warning>
+
+### walletExtensionIds
+
+A map of wallet types to their Chrome extension IDs.
+
+**Type**: `Map<string, string>`
+
+**Scope**: Worker (persists across tests)
+
+**Usage**:
+
+```typescript
+test('get extension IDs', async ({ walletExtensionIds }) => {
+  const polkadotJsId = walletExtensionIds.get('polkadot-js')
+  const talismanId = walletExtensionIds.get('talisman')
+  
+  console.log('Polkadot-JS extension ID:', polkadotJsId)
+  console.log('Talisman extension ID:', talismanId)
+})
+```
+
+## Fixture lifecycle
+
+<Steps>
+  <Step title="Worker startup">
+    When a worker process starts:
+    1. `walletContext` is created with all extensions loaded
+    2. `walletExtensionIds` map is populated by detecting service workers
+  </Step>
+  
+  <Step title="Test execution">
+    For each test:
+    1. `page` fixture is created from the worker's context
+    2. `wallets` fixture creates wallet instances using the extension IDs
+    3. Test runs with access to all fixtures
+  </Step>
+  
+  <Step title="Test cleanup">
+    After each test:
+    - `page` and `wallets` fixtures are cleaned up
+    - `walletContext` and `walletExtensionIds` persist for the next test
+  </Step>
+  
+  <Step title="Worker shutdown">
+    When the worker exits:
+    - `walletContext` is closed
+    - All browser resources are released
+  </Step>
+</Steps>
+
+## Example
+
+Complete example using all fixtures:
+
+```typescript
+import { createWalletTest } from '@commonwealth/chroma'
+
+const test = createWalletTest({
+  wallets: [
+    { type: 'polkadot-js' },
+    { type: 'talisman' },
+  ] as const,
+})
+
+test('complete fixture example', async ({
+  page,
+  wallets,
+  walletContext,
+  walletExtensionIds,
+}) => {
+  // Log extension IDs
+  console.log('Extension IDs:', Object.fromEntries(walletExtensionIds))
+  
+  // Import accounts
+  await wallets['polkadot-js'].importMnemonic({
+    seed: 'test seed phrase',
+    name: 'Test Account',
+  })
+  
+  // Navigate to your dApp
+  await page.goto('http://localhost:3000')
+  
+  // Authorize wallet connection
+  await wallets['polkadot-js'].authorize()
+  
+  // Interact with your dApp
+  await page.click('button:has-text("Send Transaction")')
+  
+  // Approve transaction in wallet
+  await wallets['polkadot-js'].approveTx({ password: 'test' })
+})
+```
+
+## Related
+
+- [createWalletTest](/api/create-wallet-test) - Configure wallet fixtures
+- [Wallet instances](/api/wallet-instances) - Wallet method reference

@@ -1,0 +1,484 @@
+---
+title: Wallet instances
+description: Methods available on wallet instance objects
+---
+
+## Overview
+
+Wallet instances provide methods to interact with wallet browser extensions. Each wallet type has a specific set of methods tailored to its API.
+
+## PolkadotJsWalletInstance
+
+Methods for interacting with the Polkadot-JS extension.
+
+**Type**: `PolkadotJsWalletInstance`
+
+### Properties
+
+<ParamField path="extensionId" type="string">
+  The Chrome extension ID for this wallet instance
+</ParamField>
+
+<ParamField path="type" type="'polkadot-js'">
+  The wallet type identifier
+</ParamField>
+
+### importMnemonic()
+
+Import an account using a mnemonic seed phrase.
+
+```typescript
+async importMnemonic(options: WalletAccount): Promise<void>
+```
+
+<ParamField path="options.seed" type="string" required>
+  The mnemonic seed phrase (12 or 24 words)
+</ParamField>
+
+<ParamField path="options.name" type="string" optional>
+  Account name to display in the wallet
+</ParamField>
+
+<ParamField path="options.password" type="string" optional>
+  Password to encrypt the account
+</ParamField>
+
+**Example**:
+
+```typescript
+await wallets['polkadot-js'].importMnemonic({
+  seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+  name: 'Test Account',
+  password: 'test123',
+})
+```
+
+### authorize()
+
+Authorize a website to connect to the wallet.
+
+```typescript
+async authorize(): Promise<void>
+```
+
+**Example**:
+
+```typescript
+// Navigate to your dApp first
+await page.goto('http://localhost:3000')
+
+// Click connect button in your dApp
+await page.click('button:has-text("Connect Wallet")')
+
+// Authorize in the wallet popup
+await wallets['polkadot-js'].authorize()
+```
+
+### approveTx()
+
+Approve a transaction in the wallet popup.
+
+```typescript
+async approveTx(options?: { password?: string }): Promise<void>
+```
+
+<ParamField path="options.password" type="string" optional>
+  Account password if the account is encrypted
+</ParamField>
+
+**Example**:
+
+```typescript
+// Trigger a transaction in your dApp
+await page.click('button:has-text("Send Transaction")')
+
+// Approve it in the wallet
+await wallets['polkadot-js'].approveTx({ password: 'test123' })
+```
+
+### rejectTx()
+
+Reject a transaction in the wallet popup.
+
+```typescript
+async rejectTx(): Promise<void>
+```
+
+**Example**:
+
+```typescript
+await page.click('button:has-text("Send Transaction")')
+await wallets['polkadot-js'].rejectTx()
+```
+
+---
+
+## TalismanWalletInstance
+
+Methods for interacting with the Talisman extension.
+
+**Type**: `TalismanWalletInstance`
+
+### Properties
+
+<ParamField path="extensionId" type="string">
+  The Chrome extension ID for this wallet instance
+</ParamField>
+
+<ParamField path="type" type="'talisman'">
+  The wallet type identifier
+</ParamField>
+
+### importPolkadotMnemonic()
+
+Import a Polkadot account using a mnemonic.
+
+```typescript
+async importPolkadotMnemonic(options: WalletAccount): Promise<void>
+```
+
+<ParamField path="options.seed" type="string" required>
+  The mnemonic seed phrase
+</ParamField>
+
+<ParamField path="options.name" type="string" optional>
+  Account name to display in the wallet
+</ParamField>
+
+<ParamField path="options.password" type="string" optional>
+  Password to encrypt the account
+</ParamField>
+
+**Example**:
+
+```typescript
+await wallets.talisman.importPolkadotMnemonic({
+  seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+  name: 'Polkadot Account',
+  password: 'test123',
+})
+```
+
+### importEthPrivateKey()
+
+Import an Ethereum account using a private key.
+
+```typescript
+async importEthPrivateKey(options: {
+  privateKey: string
+  name?: string
+  password?: string
+}): Promise<void>
+```
+
+<ParamField path="options.privateKey" type="string" required>
+  The Ethereum private key (with or without 0x prefix)
+</ParamField>
+
+<ParamField path="options.name" type="string" optional>
+  Account name to display in the wallet
+</ParamField>
+
+<ParamField path="options.password" type="string" optional>
+  Password to encrypt the account
+</ParamField>
+
+**Example**:
+
+```typescript
+await wallets.talisman.importEthPrivateKey({
+  privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+  name: 'Ethereum Account',
+})
+```
+
+### authorize()
+
+Authorize a website to connect to the wallet.
+
+```typescript
+async authorize(options?: { accountName?: string }): Promise<void>
+```
+
+<ParamField path="options.accountName" type="string" optional>
+  Specific account name to authorize. If not provided, uses the most recently imported account.
+</ParamField>
+
+**Example**:
+
+```typescript
+await page.goto('http://localhost:3000')
+await page.click('button:has-text("Connect Wallet")')
+await wallets.talisman.authorize({ accountName: 'Polkadot Account' })
+```
+
+### approveTx()
+
+Approve a transaction in the wallet popup.
+
+```typescript
+async approveTx(): Promise<void>
+```
+
+**Example**:
+
+```typescript
+await page.click('button:has-text("Send Transaction")')
+await wallets.talisman.approveTx()
+```
+
+### rejectTx()
+
+Reject a transaction in the wallet popup.
+
+```typescript
+async rejectTx(): Promise<void>
+```
+
+**Example**:
+
+```typescript
+await page.click('button:has-text("Send Transaction")')
+await wallets.talisman.rejectTx()
+```
+
+---
+
+## MetaMaskWalletInstance
+
+Methods for interacting with the MetaMask extension.
+
+**Type**: `MetaMaskWalletInstance`
+
+### Properties
+
+<ParamField path="extensionId" type="string">
+  The Chrome extension ID for this wallet instance
+</ParamField>
+
+<ParamField path="type" type="'metamask'">
+  The wallet type identifier
+</ParamField>
+
+### importSeedPhrase()
+
+Import a wallet using a seed phrase during initial setup.
+
+```typescript
+async importSeedPhrase(options: { seedPhrase: string }): Promise<void>
+```
+
+<ParamField path="options.seedPhrase" type="string" required>
+  The seed phrase to import (12, 15, 18, 21, or 24 words)
+</ParamField>
+
+**Example**:
+
+```typescript
+await wallets.metamask.importSeedPhrase({
+  seedPhrase: 'test test test test test test test test test test test junk',
+})
+```
+
+<Note>
+This method should be called once during the first test in a worker. MetaMask sets a default password of "Chroma@1234" during import.
+</Note>
+
+### unlock()
+
+Unlock MetaMask with the default password.
+
+```typescript
+async unlock(): Promise<void>
+```
+
+**Example**:
+
+```typescript
+// MetaMask locks after some time
+await wallets.metamask.unlock()
+```
+
+### authorize()
+
+Authorize a website to connect to MetaMask.
+
+```typescript
+async authorize(): Promise<void>
+```
+
+**Example**:
+
+```typescript
+await page.goto('http://localhost:3000')
+await page.click('button:has-text("Connect MetaMask")')
+await wallets.metamask.authorize()
+```
+
+### confirm()
+
+Confirm a transaction or message signature.
+
+```typescript
+async confirm(): Promise<void>
+```
+
+**Example**:
+
+```typescript
+// Send a transaction
+await page.click('button:has-text("Send ETH")')
+await wallets.metamask.confirm()
+
+// Sign a message
+await page.click('button:has-text("Sign Message")')
+await wallets.metamask.confirm()
+```
+
+### reject()
+
+Reject a transaction or message signature.
+
+```typescript
+async reject(): Promise<void>
+```
+
+**Example**:
+
+```typescript
+await page.click('button:has-text("Send ETH")')
+await wallets.metamask.reject()
+```
+
+---
+
+## Type definitions
+
+### WalletAccount
+
+```typescript
+interface WalletAccount {
+  seed: string
+  name?: string
+  password?: string
+}
+```
+
+### WalletTypeMap
+
+```typescript
+interface WalletTypeMap {
+  'polkadot-js': PolkadotJsWalletInstance
+  'talisman': TalismanWalletInstance
+  'metamask': MetaMaskWalletInstance
+}
+```
+
+---
+
+## Complete example
+
+<Tabs>
+  <Tab title="Polkadot-JS">
+    ```typescript
+    import { createWalletTest } from '@commonwealth/chroma'
+    
+    const test = createWalletTest()
+    
+    test('complete Polkadot-JS flow', async ({ page, wallets }) => {
+      // 1. Import account
+      await wallets['polkadot-js'].importMnemonic({
+        seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+        name: 'Test Account',
+        password: 'test123',
+      })
+      
+      // 2. Navigate to dApp
+      await page.goto('http://localhost:3000')
+      
+      // 3. Connect wallet
+      await page.click('button:has-text("Connect")')
+      await wallets['polkadot-js'].authorize()
+      
+      // 4. Send transaction
+      await page.click('button:has-text("Send")')
+      await wallets['polkadot-js'].approveTx({ password: 'test123' })
+      
+      // 5. Verify transaction completed
+      await page.waitForSelector('text=Transaction successful')
+    })
+    ```
+  </Tab>
+  
+  <Tab title="Talisman">
+    ```typescript
+    import { createWalletTest } from '@commonwealth/chroma'
+    
+    const test = createWalletTest({
+      wallets: [{ type: 'talisman' }],
+    })
+    
+    test('complete Talisman flow', async ({ page, wallets }) => {
+      // 1. Import Polkadot account
+      await wallets.talisman.importPolkadotMnemonic({
+        seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk',
+        name: 'DOT Account',
+      })
+      
+      // 2. Import Ethereum account
+      await wallets.talisman.importEthPrivateKey({
+        privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+        name: 'ETH Account',
+      })
+      
+      // 3. Connect to dApp
+      await page.goto('http://localhost:3000')
+      await page.click('button:has-text("Connect")')
+      await wallets.talisman.authorize({ accountName: 'DOT Account' })
+      
+      // 4. Send transaction
+      await page.click('button:has-text("Send")')
+      await wallets.talisman.approveTx()
+    })
+    ```
+  </Tab>
+  
+  <Tab title="MetaMask">
+    ```typescript
+    import { createWalletTest } from '@commonwealth/chroma'
+    
+    const test = createWalletTest({
+      wallets: [{ type: 'metamask' }],
+    })
+    
+    test.beforeAll(async ({ wallets }) => {
+      // Import seed phrase once per worker
+      await wallets.metamask.importSeedPhrase({
+        seedPhrase: 'test test test test test test test test test test test junk',
+      })
+    })
+    
+    test('complete MetaMask flow', async ({ page, wallets }) => {
+      // 1. Navigate to dApp
+      await page.goto('http://localhost:3000')
+      
+      // 2. Connect wallet
+      await page.click('button:has-text("Connect MetaMask")')
+      await wallets.metamask.authorize()
+      
+      // 3. Sign message
+      await page.click('button:has-text("Sign")')
+      await wallets.metamask.confirm()
+      
+      // 4. Send transaction
+      await page.click('button:has-text("Send ETH")')
+      await wallets.metamask.confirm()
+    })
+    ```
+  </Tab>
+</Tabs>
+
+## Related
+
+- [createWalletTest](/api/create-wallet-test) - Configure wallet fixtures
+- [Test fixtures](/api/test-fixtures) - Fixture documentation

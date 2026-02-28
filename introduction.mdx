@@ -1,0 +1,93 @@
+---
+title: Introduction
+description: End-to-end testing library for blockchain wallet interactions using Playwright
+---
+
+# Introduction
+
+Chroma is an end-to-end testing library that simplifies testing blockchain wallet interactions using Playwright. It provides a unified API for testing wallet extensions like Polkadot JS, Talisman, and MetaMask.
+
+## Why Chroma?
+
+Testing dApps with wallet extensions is traditionally difficult:
+
+- **Complex setup** - Manually loading browser extensions and handling multiple contexts
+- **Brittle selectors** - Wallet UIs change frequently, breaking tests
+- **No type safety** - Writing raw Playwright scripts without autocomplete or validation
+- **Multi-wallet testing** - Testing with multiple wallets requires duplicated code
+
+Chroma solves these problems with:
+
+- **Easy extension setup** - Download wallet extensions with a single command
+- **Multi-wallet support** - Test with multiple wallet extensions simultaneously
+- **TypeScript support** - Full type safety and autocomplete
+- **Stable API** - High-level methods that abstract wallet implementation details
+
+## Supported wallets
+
+Chroma supports the following wallet extensions:
+
+<CardGroup cols={2}>
+  <Card title="Polkadot JS Extension" icon="wallet" iconType="duotone">
+    Version 0.62.6
+  </Card>
+  <Card title="Talisman" icon="wallet" iconType="duotone">
+    Version 3.1.13
+  </Card>
+  <Card title="MetaMask" icon="wallet" iconType="duotone">
+    Version 13.17.0 (Flask)
+  </Card>
+  <Card title="SubWallet" icon="wallet" iconType="duotone">
+    Coming soon
+  </Card>
+</CardGroup>
+
+## Supported chains
+
+- **Polkadot** - Fully supported
+- **Ethereum** - Fully supported
+- **Solana** - Planned
+
+## Quick example
+
+```typescript
+import { createWalletTest } from '@avalix/chroma'
+
+const test = createWalletTest({
+  wallets: [{ type: 'polkadot-js' }]
+})
+
+test('connect wallet', async ({ page, wallets }) => {
+  const polkadotJs = wallets['polkadot-js']
+
+  await polkadotJs.importMnemonic({
+    seed: 'bottom drive obey lake curtain smoke basket hold race lonely fit walk'
+  })
+
+  await page.goto('http://localhost:3000')
+  await polkadotJs.authorize()
+  await polkadotJs.approveTx()
+})
+```
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" iconType="duotone" href="/installation">
+    Install Chroma and download wallet extensions
+  </Card>
+  <Card title="Quickstart" icon="rocket" iconType="duotone" href="/quickstart">
+    Build your first wallet test in minutes
+  </Card>
+  <Card title="API reference" icon="code" iconType="duotone" href="/api/create-wallet-test">
+    Explore the complete API documentation
+  </Card>
+  <Card title="Supported wallets" icon="wallet" iconType="duotone" href="/wallets/overview">
+    See all supported wallet extensions
+  </Card>
+</CardGroup>
+
+## Requirements
+
+- Node.js 24+
+- @playwright/test ^1.55.0

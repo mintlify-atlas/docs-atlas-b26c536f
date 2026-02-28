@@ -1,0 +1,116 @@
+---
+title: Installation
+description: Install Chroma and set up wallet extensions for testing
+---
+
+# Installation
+
+Get started with Chroma by installing the package and downloading wallet extensions.
+
+## Install the package
+
+Install Chroma along with its peer dependency `@playwright/test`:
+
+<CodeGroup>
+
+```bash npm
+npm install @avalix/chroma @playwright/test
+```
+
+```bash yarn
+yarn add @avalix/chroma @playwright/test
+```
+
+```bash pnpm
+pnpm add @avalix/chroma @playwright/test
+```
+
+```bash bun
+bun add @avalix/chroma @playwright/test
+```
+
+</CodeGroup>
+
+<Note>
+  `@playwright/test` is a peer dependency and must be installed separately to avoid version conflicts with your existing Playwright setup.
+</Note>
+
+## Download wallet extensions
+
+Before running your tests, download the wallet extensions you want to test with:
+
+```bash
+npx chroma download-extensions
+```
+
+This command downloads wallet extensions (MetaMask, Polkadot JS, Talisman) to the `.chroma` directory in your project root.
+
+<Warning>
+  You must run this command before running Playwright tests. If the extension is not found, tests will fail with a helpful error message.
+</Warning>
+
+### Add to package.json
+
+For convenience, add the download command to your `package.json` scripts:
+
+```json package.json
+{
+  "scripts": {
+    "test:prepare": "chroma download-extensions",
+    "test": "playwright test"
+  }
+}
+```
+
+Then run:
+
+```bash
+npm run test:prepare
+npm test
+```
+
+## Verify installation
+
+Create a simple test file to verify your installation:
+
+```typescript test.spec.ts
+import { test, expect } from '@avalix/chroma'
+
+test('basic test', async ({ page }) => {
+  await page.goto('https://example.com')
+  await expect(page).toHaveTitle(/Example/)
+})
+```
+
+Run the test:
+
+```bash
+npx playwright test
+```
+
+<Tip>
+  The default `test` export from Chroma is pre-configured with the Polkadot JS wallet. For custom wallet configurations, use `createWalletTest()`.
+</Tip>
+
+## What's in .chroma?
+
+The `.chroma` directory contains:
+
+- `metamask/` - MetaMask extension files
+- `polkadot-js/` - Polkadot JS extension files
+- `talisman/` - Talisman extension files
+
+<Note>
+  Add `.chroma/` to your `.gitignore` file. The extensions should be downloaded as part of your test setup, not committed to version control.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" iconType="duotone" href="/quickstart">
+    Build your first wallet test
+  </Card>
+  <Card title="API reference" icon="code" iconType="duotone" href="/api/create-wallet-test">
+    Explore the complete API
+  </Card>
+</CardGroup>
