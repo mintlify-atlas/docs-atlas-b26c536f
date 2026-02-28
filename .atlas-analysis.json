@@ -1,0 +1,84 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Chroma",
+  "projectDescription": "End-to-end testing library for Polkadot wallet interactions using Playwright",
+  "theme": "palm",
+  "primaryColor": "#E6007A",
+  "lightColor": "#F472B6",
+  "darkColor": "#BE185D",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": ["introduction", "installation", "quickstart"]
+          },
+          {
+            "group": "Wallets",
+            "pages": [
+              "wallets/overview",
+              "wallets/polkadot-js",
+              "wallets/talisman",
+              "wallets/metamask"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/multi-wallet-testing",
+              "guides/ci-cd-integration",
+              "guides/docker-setup",
+              "guides/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core API",
+            "pages": [
+              "api/create-wallet-test",
+              "api/test-fixtures",
+              "api/wallet-instances"
+            ]
+          },
+          {
+            "group": "CLI",
+            "pages": ["api/cli"]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-wallet support (Polkadot-JS, Talisman, MetaMask)",
+    "Playwright-based E2E testing framework",
+    "Automated extension download and setup",
+    "TypeScript support with full type safety",
+    "CI/CD and Docker integration"
+  ],
+  "publicApiSurface": [
+    "createWalletTest(options)",
+    "test (default test instance)",
+    "expect (re-exported from Playwright)",
+    "PolkadotJsWallet.importMnemonic()",
+    "PolkadotJsWallet.authorize()",
+    "PolkadotJsWallet.approveTx()",
+    "PolkadotJsWallet.rejectTx()",
+    "TalismanWallet.importPolkadotMnemonic()",
+    "TalismanWallet.importEthPrivateKey()",
+    "TalismanWallet.authorize()",
+    "TalismanWallet.approveTx()",
+    "TalismanWallet.rejectTx()",
+    "MetaMaskWallet.importSeedPhrase()",
+    "MetaMaskWallet.unlock()",
+    "MetaMaskWallet.authorize()",
+    "MetaMaskWallet.confirm()",
+    "MetaMaskWallet.reject()",
+    "CLI: chroma download-extensions"
+  ]
+}
