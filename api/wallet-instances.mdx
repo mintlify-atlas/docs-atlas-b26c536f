@@ -281,7 +281,7 @@ await wallets.metamask.importSeedPhrase({
 ```
 
 <Note>
-This method should be called once during the first test in a worker. MetaMask sets a default password of "Chroma@1234" during import.
+This method should be called once during the first test in a worker. MetaMask sets a default password of "h3llop0lkadot!" during import.
 </Note>
 
 ### unlock()
@@ -381,7 +381,7 @@ interface WalletTypeMap {
 <Tabs>
   <Tab title="Polkadot-JS">
     ```typescript
-    import { createWalletTest } from '@commonwealth/chroma'
+    import { createWalletTest } from '@avalix/chroma'
     
     const test = createWalletTest()
     
@@ -412,7 +412,7 @@ interface WalletTypeMap {
   
   <Tab title="Talisman">
     ```typescript
-    import { createWalletTest } from '@commonwealth/chroma'
+    import { createWalletTest } from '@avalix/chroma'
     
     const test = createWalletTest({
       wallets: [{ type: 'talisman' }],
@@ -445,7 +445,7 @@ interface WalletTypeMap {
   
   <Tab title="MetaMask">
     ```typescript
-    import { createWalletTest } from '@commonwealth/chroma'
+    import { createWalletTest } from '@avalix/chroma'
     
     const test = createWalletTest({
       wallets: [{ type: 'metamask' }],
